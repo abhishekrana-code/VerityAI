@@ -1,0 +1,96 @@
+# VerityAI .gitignore
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+.env
+.env.*
+!.env.example
+
+# =============================================================================
+# Backend (Java/Maven)
+# =============================================================================
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/.mvn/timing.properties
+backend/.mvn/wrapper/maven-wrapper.properties
+!backend/.mvn/wrapper/maven-wrapper.properties
+backend/HELP.md
+backend/mvnw
+backend/mvnw.cmd
+backend/src/main/resources/application-*.yml
+!backend/src/main/resources/application.yml
+!backend/src/main/resources/application-dev.yml
+backend/.classpath
+backend/.project
+backend/.settings/
+backend/.idea/
+backend/*.iml
+backend/out/
+
+# =============================================================================
+# Frontend (Node/Vite)
+# =============================================================================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+frontend/*.local
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.turbo/
+
+# =============================================================================
+# IDE & OS
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =============================================================================
+# Docker & Deployment
+# =============================================================================
+deployment/*.pem
+deployment/*.key
+deployment/*.crt
+deployment/.env
+docker-compose.override.yml
+
+# =============================================================================
+# Logs & Temp
+# =============================================================================
+*.log
+*.err
+logs/
+tmp/
+temp/
+*.tmp
+
+# =============================================================================
+# Local tooling & personal notes
+# =============================================================================
+*.zip
+/stop
+/.claude/
+
+# =============================================================================
+# Test & Coverage
+# =============================================================================
+**/target/surefire-reports/
+**/target/failsafe-reports/
+**/jacoco/
+*.ec
+
+# =============================================================================
+# OS generated files
+# =============================================================================
+ehthumbs.db
+Desktop.ini

@@ -1,0 +1,16 @@
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+
+logging:
+  level:
+    com.verityai: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+
+verityai:
+  upload:
+    dir: ${TEMP}/verityai/uploads

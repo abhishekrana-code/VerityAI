@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: verityai-postgres
+    environment:
+      POSTGRES_DB: verityai
+      POSTGRES_USER: verityai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-verityai_dev}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verityai -d verityai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

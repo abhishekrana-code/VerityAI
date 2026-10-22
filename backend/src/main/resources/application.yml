@@ -1,0 +1,98 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: ${SERVER_SERVLET_SESSION_COOKIE_SECURE:false}
+        same-site: ${SERVER_SERVLET_SESSION_COOKIE_SAME_SITE:lax}
+      timeout: ${SERVER_SERVLET_SESSION_TIMEOUT:30m}
+
+spring:
+  application:
+    name: verityai
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:postgresql://localhost:5434/verityai
+    username: verityai
+    password: verityai_dev
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  session:
+    jdbc:
+      initialize-schema: never
+    store-type: ${SPRING_SESSION_STORE_TYPE:jdbc}
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE_MB:25}MB
+      max-request-size: ${MAX_FILE_SIZE_MB:25}MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
+logging:
+  level:
+    com.verityai: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  correlation:
+    key: X-Request-ID
+
+verityai:
+  groq:
+    api-key: ${GROQ_API_KEY:}
+    model: ${GROQ_MODEL:openai/gpt-oss-20b}
+    api-url: ${GROQ_API_URL:https://api.groq.com/openai/v1/chat/completions}
+    connect-timeout-ms: ${GROQ_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${GROQ_READ_TIMEOUT_MS:60000}
+    max-retries: ${GROQ_MAX_RETRIES:2}
+    max-tokens: ${GROQ_MAX_TOKENS:4096}
+  upload:
+    dir: ${UPLOAD_DIR:/var/lib/verityai/uploads}
+    max-file-size-mb: ${MAX_FILE_SIZE_MB:25}
+    max-pages: ${MAX_PAGES:200}
+  document:
+    chunk-size-chars: ${CHUNK_SIZE_CHARS:1000}
+    chunk-overlap-chars: ${CHUNK_OVERLAP_CHARS:150}
+  retrieval:
+    top-k: ${RETRIEVAL_TOP_K:8}
+    min-rank: ${RETRIEVAL_MIN_RANK:0.1}
+  rate-limit:
+    ai-requests-per-minute: ${RATE_LIMIT_AI_REQUESTS_PER_MINUTE:20}
+    uploads-per-hour: ${RATE_LIMIT_UPLOADS_PER_HOUR:10}
+    login-per-minute-ip: ${RATE_LIMIT_LOGIN_PER_MINUTE_IP:5}
