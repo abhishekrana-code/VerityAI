@@ -8,6 +8,7 @@ import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.security.CurrentUser;
+import com.verityai.security.RateLimitService;
 import com.verityai.service.document.DocumentService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -32,12 +33,14 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final DocumentRepository documentRepository;
+    private final RateLimitService rateLimitService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentUploadResponse> upload(
             @CurrentUser User user,
             @RequestPart("file") MultipartFile file
     ) {
+        rateLimitService.checkUpload(user.getId());
         Document document = documentService.upload(user.getId(), file);
         DocumentUploadResponse resp = new DocumentUploadResponse();
         resp.setId(document.getId());

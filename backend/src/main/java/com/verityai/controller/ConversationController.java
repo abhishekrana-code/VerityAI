@@ -19,6 +19,7 @@ import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.MessageCitationRepository;
 import com.verityai.repository.MessageRepository;
 import com.verityai.security.CurrentUser;
+import com.verityai.security.RateLimitService;
 import com.verityai.service.ai.ChatService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -47,6 +48,7 @@ public class ConversationController {
     private final MessageRepository messageRepository;
     private final MessageCitationRepository citationRepository;
     private final ChatService chatService;
+    private final RateLimitService rateLimitService;
 
     @PostMapping
     public ResponseEntity<ConversationResponse> create(@CurrentUser User user, @Valid @RequestBody CreateConversationRequest request) {
@@ -186,6 +188,7 @@ public class ConversationController {
 
     @PostMapping("/{id}/messages")
     public ResponseEntity<MessageResponse> ask(@CurrentUser User user, @PathVariable UUID id, @Valid @RequestBody AskQuestionRequest request) {
+        rateLimitService.checkAiRequest(user.getId());
         Conversation conversation = conversationRepository.findByIdAndUserIdAndArchivedAtIsNull(id, user.getId())
             .orElseThrow(() -> ApiException.notFound("Conversation not found"));
 

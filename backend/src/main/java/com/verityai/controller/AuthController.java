@@ -11,6 +11,7 @@ import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.UserRepository;
 import com.verityai.security.CurrentUser;
+import com.verityai.security.RateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -34,6 +35,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
+    private final RateLimitService rateLimitService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request,
@@ -58,6 +60,7 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
                                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        rateLimitService.checkLogin(java.util.Objects.toString(httpRequest.getRemoteAddr(), "unknown"));
         authenticateAndSave(request.getEmail(), request.getPassword(), httpRequest, httpResponse);
 
         User user = userRepository.findByEmailIgnoreCase(request.getEmail())
