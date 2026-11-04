@@ -16,7 +16,7 @@ VerityAI is a full-stack AI research platform that lets users upload PDFs and as
 | Backend | Java 21, Spring Boot 3.5, Maven Wrapper, Spring Security (Session + CSRF), Spring Data JPA, Flyway |
 | Database | PostgreSQL 17 (Docker), full-text search |
 | AI | Groq API (OpenAI-compatible), Java `HttpClient` + Jackson |
-| Deployment | Docker Compose, Nginx reverse proxy, Windows host |
+| Deployment | Docker Compose (Postgres), nginx reverse proxy, Cloudflare Tunnel — see [docs/deployment.md](docs/deployment.md) |
 
 ---
 
@@ -45,6 +45,12 @@ docker compose up -d postgres
 ### 3. Backend
 ```powershell
 cd backend
+# Load .env into this terminal (Spring reads OS environment variables):
+Get-Content ..\.env | ForEach-Object {
+  if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+    [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+  }
+}
 .\mvnw.cmd spring-boot:run
 # Runs on http://localhost:8080
 # Health: http://localhost:8080/actuator/health
@@ -65,9 +71,8 @@ npm run dev
 verity-ai/
 ├─ frontend/          # React SPA
 ├─ backend/           # Spring Boot API
-├─ deployment/        # Nginx, compose overrides, scripts
-├─ docs/              # Architecture, API, deployment guides
-├─ docker-compose.yml # Postgres (dev) + full stack (prod)
+├─ docs/              # Architecture, implementation plan, deployment runbook
+├─ docker-compose.yml # Postgres 17 (dev database)
 ├─ .env.example       # Template for environment variables
 └─ README.md          # This file
 ```
@@ -80,6 +85,7 @@ verity-ai/
 - **Document library** — Upload, process, search, retry failed PDFs
 - **Research workspace** — Chat interface with citation panel, conversation history
 - **Secure by default** — Session auth, HttpOnly cookies, CSRF, ownership enforcement
+- **Rate limited** — Per-IP login and per-user upload/AI quotas return 429 with `Retry-After`
 - **Observable** — Structured logs, request IDs, health endpoints, Actuator metrics
 
 ---
@@ -102,27 +108,58 @@ verity-ai/
 ## Environment Variables
 
 See `.env.example` for all options. Minimum required:
-- `GROQ_API_KEY` — from https://console.groq.com/keys
-- `POSTGRES_PASSWORD` — if different from default
+- `GROQ_API_KEY` — from https://console.groq.com/keys (chat fails without it)
+
+Everything else has working defaults. Note: the backend's JDBC credentials
+are set in `backend/src/main/resources/application.yml` — keep
+`POSTGRES_PASSWORD` at its default (`verityai_dev`), or change both together.
 
 ---
 
-## API Documentation
+## Testing & CI
 
-When running, OpenAPI UI available at:
-- `http://localhost:8080/swagger-ui.html` (if springdoc enabled)
-- `http://localhost:8080/api-docs` (JSON spec)
+- **Backend**: 39 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 in Docker).
+  Run `cd backend && .\mvnw.cmd test` (Docker must be running).
+- **Frontend**: 12 tests — Vitest + jsdom. Run `cd frontend && npm test`.
+- **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend) and lint/typecheck/test/build
+  (frontend) on every push. Testcontainers requires a Docker-capable runner.
 
 ---
 
-## Deployment (Windows Host)
+## API Overview
 
-See `deployment/README.md` for:
-- Production Docker Compose
-- Nginx configuration with HTTPS (self-signed or Let's Encrypt)
-- Docker Desktop auto-start on boot
-- Database backup/restore scripts
-- Log rotation
+All endpoints live under `/api/v1` and return JSON. Auth is a `SESSION` cookie;
+state-changing requests (everything except `/auth/**`) also need the `XSRF-TOKEN`
+cookie echoed back as an `X-XSRF-TOKEN` header.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/auth/register`, `/auth/login`, `/auth/logout` | Session cookie auth; CSRF-exempt |
+| GET | `/auth/csrf`, `/auth/me` | Provision CSRF token / current user |
+| PATCH | `/auth/users/me` | Profile update |
+| POST | `/auth/users/me/password` | Change password |
+| GET/POST | `/documents` | List / upload PDF (multipart field `file`) |
+| GET/DELETE | `/documents/{id}`, `/documents/{id}/status` | Detail, processing status, delete |
+| POST | `/documents/{id}/retry` | Re-run failed processing |
+| GET/POST | `/conversations` | List / create |
+| GET/PATCH/DELETE | `/conversations/{id}` | Detail, rename/archive, delete |
+| GET/POST | `/conversations/{id}/messages` | Read history / ask a question (RAG + citations) |
+| GET | `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness` | Probes (unauthenticated) |
+
+Error responses share one envelope: `{ code, message, fieldErrors?, requestId }`.
+Rate-limited responses (429) additionally carry a `Retry-After` header.
+
+---
+
+## Deployment
+
+Self-hosted deployment (Ubuntu server, systemd, nginx, Cloudflare, backups) is
+documented in **[docs/deployment.md](docs/deployment.md)**.
+
+Key production settings:
+- `SERVER_SERVLET_SESSION_COOKIE_SECURE=true` (HTTPS)
+- `SPRING_PROFILES_ACTIVE=prod`
+- `RATE_LIMIT_*`, `GROQ_API_KEY`, and an absolute `UPLOAD_DIR` outside the web root
 
 ---
 

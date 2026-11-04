@@ -53,23 +53,23 @@ public class RateLimitService {
     /** Consumes one login attempt for this client IP; 429 when exhausted. */
     public void checkLogin(String clientIp) {
         acquire("login", clientIp, loginConfig, ErrorCode.RATE_LIMITED,
-                "Too many login attempts, please try again later");
+                "Too many login attempts, please try again later", 60);
     }
 
     /** Consumes one upload slot for this user; 429 when exhausted. */
     public void checkUpload(UUID userId) {
         acquire("upload", userId.toString(), uploadConfig, ErrorCode.RATE_LIMITED,
-                "Upload limit reached, please try again later");
+                "Upload limit reached, please try again later", 3600);
     }
 
     /** Consumes one AI/chat request slot for this user; 429 when exhausted. */
     public void checkAiRequest(UUID userId) {
         acquire("ai", userId.toString(), aiConfig, ErrorCode.AI_RATE_LIMITED,
-                "AI request limit reached, please try again later");
+                "AI request limit reached, please try again later", 60);
     }
 
     private void acquire(String bucket, String key, RateLimiterConfig config,
-                         ErrorCode errorCode, String message) {
+                         ErrorCode errorCode, String message, long retryAfterSeconds) {
         if (config == null) {
             return; // limit disabled by non-positive configuration
         }
@@ -78,7 +78,7 @@ public class RateLimitService {
         Entry entry = limiters.computeIfAbsent(id, k -> new Entry(RateLimiter.of(k, config)));
         entry.lastAccess = now;
         if (!entry.limiter.acquirePermission()) {
-            throw new ApiException(errorCode, message, 429);
+            throw new ApiException(errorCode, message, 429, null, retryAfterSeconds);
         }
         if (limiters.size() > MAX_TRACKED_KEYS) {
             sweep(now);

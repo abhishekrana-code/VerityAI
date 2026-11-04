@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Document, type DocumentListResponse, type DocumentUploadResponse } from '@/lib/api';
+import { errorToast } from '@/lib/errors';
 import { Upload, FileText, Loader2, Search, Trash2, RotateCcw, ChevronLeft, ChevronRight, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -52,7 +53,7 @@ export function DocumentsPage() {
       toast({ title: 'Upload started', description: 'Document is being processed' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
+      toast(errorToast(error, 'Upload failed'));
     },
     onSettled: () => setUploading(false),
   });

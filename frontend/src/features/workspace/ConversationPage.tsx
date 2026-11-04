@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Message, type MessageListResponse, type Conversation } from '@/lib/api';
+import { errorToast } from '@/lib/errors';
 import { ArrowLeft, Send, Loader2, Copy, Check, AlertCircle, FileText, MoreVertical, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -62,7 +63,7 @@ export function ConversationPage() {
       if (context?.previousMessages) {
         queryClient.setQueryData(['messages', conversationId], context.previousMessages);
       }
-      toast({ title: 'Failed to send', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
+      toast(errorToast(err, 'Failed to send'));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });

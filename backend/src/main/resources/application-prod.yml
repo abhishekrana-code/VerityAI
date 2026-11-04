@@ -1,0 +1,20 @@
+# Production profile (SPRING_PROFILES_ACTIVE=prod).
+# Complements the base application.yml with quieter logging and secure
+# session-cookie defaults for HTTPS deployment (see docs/deployment.md).
+
+server:
+  servlet:
+    session:
+      cookie:
+        # Cookies must not be sent over plain HTTP in production; set
+        # SERVER_SERVLET_SESSION_COOKIE_SECURE=false only for LAN/HTTP testing.
+        secure: ${SERVER_SERVLET_SESSION_COOKIE_SECURE:true}
+
+logging:
+  level:
+    com.verityai: INFO
+    org.springframework.security: INFO
+    # Base config logs SQL at DEBUG and bind parameters at TRACE — that would
+    # leak request data (and hash parameters) into production logs.
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN

@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -115,6 +116,7 @@ class RateLimitIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isTooManyRequests())
+            .andExpect(header().string("Retry-After", "60"))
             .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
     }
 
@@ -140,6 +142,7 @@ class RateLimitIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isTooManyRequests())
+            .andExpect(header().string("Retry-After", "60"))
             .andExpect(jsonPath("$.code").value("AI_RATE_LIMITED"));
     }
 
@@ -165,6 +168,7 @@ class RateLimitIntegrationTest {
                 .cookie(session, csrf.cookie())
                 .header("X-XSRF-TOKEN", csrf.token()))
             .andExpect(status().isTooManyRequests())
+            .andExpect(header().string("Retry-After", "3600"))
             .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
     }
 }

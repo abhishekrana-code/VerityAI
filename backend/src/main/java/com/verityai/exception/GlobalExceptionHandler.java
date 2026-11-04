@@ -34,7 +34,11 @@ public class GlobalExceptionHandler {
             getRequestId(),
             ex.getFieldErrors() != null ? List.of(ex.getFieldErrors()) : null
         );
-        return ResponseEntity.status(ex.getStatus()).body(error);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(ex.getStatus());
+        if (ex.getRetryAfterSeconds() != null) {
+            response.header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()));
+        }
+        return response.body(error);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

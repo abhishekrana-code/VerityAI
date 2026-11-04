@@ -7,19 +7,24 @@ public class ApiException extends RuntimeException {
     private final ErrorCode errorCode;
     private final int status;
     private final ApiError.FieldError[] fieldErrors;
+    /** Seconds a client should wait before retrying (429 responses), or null. */
+    private final Long retryAfterSeconds;
 
     public ApiException(ErrorCode errorCode, String message, int status) {
-        super(message);
-        this.errorCode = errorCode;
-        this.status = status;
-        this.fieldErrors = null;
+        this(errorCode, message, status, null, null);
     }
 
     public ApiException(ErrorCode errorCode, String message, int status, ApiError.FieldError[] fieldErrors) {
+        this(errorCode, message, status, fieldErrors, null);
+    }
+
+    public ApiException(ErrorCode errorCode, String message, int status, ApiError.FieldError[] fieldErrors,
+                        Long retryAfterSeconds) {
         super(message);
         this.errorCode = errorCode;
         this.status = status;
         this.fieldErrors = fieldErrors;
+        this.retryAfterSeconds = retryAfterSeconds;
     }
 
     public static ApiException validation(String message, ApiError.FieldError[] fieldErrors) {

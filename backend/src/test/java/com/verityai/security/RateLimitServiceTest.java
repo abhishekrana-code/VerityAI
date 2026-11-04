@@ -16,13 +16,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class RateLimitServiceTest {
 
-    private static void assert429(Runnable check, ErrorCode expectedCode) {
+    private static void assert429(Runnable check, ErrorCode expectedCode, long expectedRetryAfter) {
         assertThatThrownBy(check::run)
             .isInstanceOf(ApiException.class)
             .satisfies(ex -> {
                 ApiException api = (ApiException) ex;
                 assertThat(api.getStatus()).isEqualTo(429);
                 assertThat(api.getErrorCode()).isEqualTo(expectedCode);
+                assertThat(api.getRetryAfterSeconds()).isEqualTo(expectedRetryAfter);
             });
     }
 
@@ -35,7 +36,7 @@ class RateLimitServiceTest {
         service.checkAiRequest(user);
         service.checkAiRequest(user);
 
-        assert429(() -> service.checkAiRequest(user), ErrorCode.AI_RATE_LIMITED);
+        assert429(() -> service.checkAiRequest(user), ErrorCode.AI_RATE_LIMITED, 60);
     }
 
     @Test
@@ -44,7 +45,7 @@ class RateLimitServiceTest {
 
         service.checkLogin("10.0.0.1");
 
-        assert429(() -> service.checkLogin("10.0.0.1"), ErrorCode.RATE_LIMITED);
+        assert429(() -> service.checkLogin("10.0.0.1"), ErrorCode.RATE_LIMITED, 60);
     }
 
     @Test
@@ -54,7 +55,7 @@ class RateLimitServiceTest {
 
         service.checkUpload(user);
 
-        assert429(() -> service.checkUpload(user), ErrorCode.RATE_LIMITED);
+        assert429(() -> service.checkUpload(user), ErrorCode.RATE_LIMITED, 3600);
     }
 
     @Test
@@ -71,10 +72,10 @@ class RateLimitServiceTest {
         service.checkUpload(bob);
 
         // each key is exhausted only for itself
-        assert429(() -> service.checkLogin("10.0.0.1"), ErrorCode.RATE_LIMITED);
-        assert429(() -> service.checkLogin("10.0.0.2"), ErrorCode.RATE_LIMITED);
-        assert429(() -> service.checkAiRequest(alice), ErrorCode.AI_RATE_LIMITED);
-        assert429(() -> service.checkUpload(bob), ErrorCode.RATE_LIMITED);
+        assert429(() -> service.checkLogin("10.0.0.1"), ErrorCode.RATE_LIMITED, 60);
+        assert429(() -> service.checkLogin("10.0.0.2"), ErrorCode.RATE_LIMITED, 60);
+        assert429(() -> service.checkAiRequest(alice), ErrorCode.AI_RATE_LIMITED, 60);
+        assert429(() -> service.checkUpload(bob), ErrorCode.RATE_LIMITED, 3600);
     }
 
     @Test

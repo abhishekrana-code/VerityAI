@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Conversation, type ConversationListResponse, type Document } from '@/lib/api';
+import { errorToast } from '@/lib/errors';
 import { Plus, Search, Loader2, MessageSquare, FileText, Sparkles, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -66,7 +67,7 @@ export function WorkspacePage() {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast({ title: 'Upload started' });
     },
-    onError: () => toast({ title: 'Upload failed', variant: 'destructive' }),
+    onError: (error: Error) => toast(errorToast(error, 'Upload failed')),
     onSettled: () => setUploading(false),
   });
 
