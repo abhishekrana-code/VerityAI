@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Document, type DocumentListResponse, type DocumentUploadResponse } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
@@ -213,6 +214,7 @@ export function DocumentsPage() {
 }
 
 function DocumentCard({ doc, onRetry, onDelete }: { doc: Document; onRetry: () => void; onDelete: () => void }) {
+  const navigate = useNavigate();
   const getStatusBadge = (status: Document['status']) => {
     const variants = {
       UPLOADED: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
@@ -236,7 +238,18 @@ function DocumentCard({ doc, onRetry, onDelete }: { doc: Document; onRetry: () =
   };
 
   return (
-    <div className="rounded-xl border p-5 hover:border-primary/50 transition-colors group relative">
+    <div
+      onClick={() => navigate(`/dashboard/documents/${doc.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigate(`/dashboard/documents/${doc.id}`);
+        }
+      }}
+      role="link"
+      tabIndex={0}
+      className="rounded-xl border p-5 hover:border-primary/50 transition-colors group relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <div className="flex items-start justify-between gap-4 mb-3">
         <FileText className="h-10 w-10 text-muted-foreground/50 group-hover:text-primary/50 transition-colors flex-shrink-0" />
         {getStatusBadge(doc.status)}
@@ -254,7 +267,10 @@ function DocumentCard({ doc, onRetry, onDelete }: { doc: Document; onRetry: () =
       <div className="flex items-center justify-end gap-2 pt-2 border-t">
         {doc.status !== 'READY' && (
           <button
-            onClick={onRetry}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry();
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             title="Retry processing"
           >
@@ -263,7 +279,10 @@ function DocumentCard({ doc, onRetry, onDelete }: { doc: Document; onRetry: () =
           </button>
         )}
         <button
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
           title="Delete"
         >

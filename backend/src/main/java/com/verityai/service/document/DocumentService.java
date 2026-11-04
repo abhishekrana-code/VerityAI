@@ -337,7 +337,8 @@ public class DocumentService {
             document.setErrorCode("FILE_MISSING");
             document.setErrorMessage("Original file not found on disk");
             documentRepository.save(document);
-            throw ApiException.internal("Original file missing");
+            throw ApiException.conflict(
+                "Original PDF file is missing on the server - delete this document and re-upload it");
         }
 
         runAfterCommit(() -> processDocument(documentId, filePath));
