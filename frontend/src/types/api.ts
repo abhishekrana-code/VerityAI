@@ -25,6 +25,7 @@ export interface Document {
   sizeBytes: number;
   pageCount: number | null;
   status: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED';
+  sha256: string;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;
@@ -141,4 +142,24 @@ export interface PaginationParams {
 export interface DocumentListParams extends PaginationParams {
   q?: string;
   status?: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  displayName?: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface UpdateProfileRequest {
+  displayName?: string;
 }

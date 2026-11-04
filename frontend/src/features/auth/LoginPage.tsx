@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Logo } from '@/components/Logo';
-import { useLogin, useCsrfToken } from '@/hooks/useAuth';
+import { useLogin } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -20,7 +19,6 @@ type LoginForm = z.infer<typeof loginSchema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const { mutate: login, isPending, error } = useLogin();
-  const { data: csrf } = useCsrfToken();
 
   const {
     register: registerField,

@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type User } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, useUpdateProfile, useChangePassword } from '@/hooks/useAuth';
-import { Loader2, User as UserIcon, Lock, Bell, Palette, Save, Check, Sun, Moon, Monitor } from 'lucide-react';
+import { Loader2, User as UserIcon, Lock, Palette, Save, Sun, Moon, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -77,7 +76,7 @@ export function SettingsPage() {
         {/* Tabs */}
         <div className="flex border-b">
           {[
-            { id: 'profile', label: 'Profile', icon: User },
+            { id: 'profile', label: 'Profile', icon: UserIcon },
             { id: 'password', label: 'Password', icon: Lock },
             { id: 'preferences', label: 'Preferences', icon: Palette },
           ].map((tab) => (

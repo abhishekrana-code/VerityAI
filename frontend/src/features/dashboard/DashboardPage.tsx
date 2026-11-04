@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
-import { Plus, FileText, MessageSquare, Upload, Clock, CheckCircle, AlertCircle, File, Loader2 } from 'lucide-react';
+import { FileText, MessageSquare, Upload, Clock, CheckCircle, AlertCircle, File, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';

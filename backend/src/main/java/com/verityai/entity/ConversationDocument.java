@@ -32,7 +32,7 @@ public class ConversationDocument {
     @JoinColumn(name = "conversation_id", insertable = false, updatable = false)
     private Conversation conversation;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "document_id", insertable = false, updatable = false)
     private Document document;
 }

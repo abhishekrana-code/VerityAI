@@ -7,7 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -20,20 +23,37 @@ public class RetrievalService {
     @Value("${verityai.retrieval.top-k:8}")
     private int topK;
 
-    @Value("${verityai.retrieval.min-rank:0.1}")
+    @Value("${verityai.retrieval.min-rank:0.01}")
     private double minRank;
 
     public List<RetrievedChunk> retrieve(UUID userId, String query) {
-        List<Object[]> results = chunkRepository.fullTextSearchWithRank(userId, query, topK);
+        return retrieve(userId, query, null);
+    }
 
-        return results.stream()
+    public List<RetrievedChunk> retrieve(UUID userId, String query, List<UUID> docIds) {
+        List<Object[]> rows;
+        if (docIds != null && !docIds.isEmpty()) {
+            rows = chunkRepository.searchIdsWithRankScoped(userId, query, docIds, topK);
+        } else {
+            rows = chunkRepository.searchIdsWithRank(userId, query, topK);
+        }
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> chunkIds = rows.stream().map(row -> (UUID) row[0]).toList();
+        Map<UUID, DocumentChunk> chunksById = new HashMap<>();
+        chunkRepository.findAllById(chunkIds).forEach(chunk -> chunksById.put(chunk.getId(), chunk));
+
+        return rows.stream()
             .map(row -> {
-                DocumentChunk chunk = (DocumentChunk) row[0];
-                Double rank = ((Number) row[1]).doubleValue();
+                DocumentChunk chunk = chunksById.get(row[0]);
+                if (chunk == null) return null;
+                double rank = ((Number) row[1]).doubleValue();
                 if (rank < minRank) return null;
                 return new RetrievedChunk(chunk, rank);
             })
-            .filter(java.util.Objects::nonNull)
+            .filter(Objects::nonNull)
             .toList();
     }
 

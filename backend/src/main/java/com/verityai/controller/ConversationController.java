@@ -11,10 +11,12 @@ import com.verityai.entity.Conversation;
 import com.verityai.entity.ConversationDocument;
 import com.verityai.entity.Document;
 import com.verityai.entity.Message;
+import com.verityai.entity.MessageCitation;
 import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.ConversationRepository;
 import com.verityai.repository.DocumentRepository;
+import com.verityai.repository.MessageCitationRepository;
 import com.verityai.repository.MessageRepository;
 import com.verityai.security.CurrentUser;
 import com.verityai.service.ai.ChatService;
@@ -43,6 +45,7 @@ public class ConversationController {
     private final ConversationRepository conversationRepository;
     private final DocumentRepository documentRepository;
     private final MessageRepository messageRepository;
+    private final MessageCitationRepository citationRepository;
     private final ChatService chatService;
 
     @PostMapping
@@ -50,6 +53,7 @@ public class ConversationController {
         Conversation conversation = new Conversation();
         conversation.setUser(user);
         conversation.setTitle(request.getTitle());
+        conversationRepository.save(conversation);
 
         if (request.getDocumentIds() != null && !request.getDocumentIds().isEmpty()) {
             List<Document> docs = documentRepository.findAllById(request.getDocumentIds());
@@ -63,12 +67,14 @@ public class ConversationController {
                 ConversationDocument cd = new ConversationDocument();
                 cd.setConversationId(conversation.getId());
                 cd.setDocumentId(doc.getId());
+                cd.setConversation(conversation);
+                cd.setDocument(doc);
                 docSet.add(cd);
             }
             conversation.setDocuments(docSet);
+            conversationRepository.save(conversation);
         }
 
-        conversationRepository.save(conversation);
         return ResponseEntity.ok(toResponse(conversation));
     }
 
@@ -118,7 +124,21 @@ public class ConversationController {
             conversation.setArchivedAt(java.time.Instant.now());
         }
         if (request.getDocumentIds() != null) {
-            // Update document scope
+            conversation.getDocuments().clear();
+            if (!request.getDocumentIds().isEmpty()) {
+                List<Document> docs = documentRepository.findAllById(request.getDocumentIds());
+                for (Document doc : docs) {
+                    if (!doc.getUser().getId().equals(user.getId())) {
+                        throw ApiException.forbidden("Document access denied: " + doc.getId());
+                    }
+                    ConversationDocument cd = new ConversationDocument();
+                    cd.setConversationId(conversation.getId());
+                    cd.setDocumentId(doc.getId());
+                    cd.setConversation(conversation);
+                    cd.setDocument(doc);
+                    conversation.getDocuments().add(cd);
+                }
+            }
         }
 
         conversationRepository.touch(id, java.time.Instant.now());
@@ -147,8 +167,14 @@ public class ConversationController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "createdAt"));
         Page<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(id, pageable);
 
+        List<UUID> messageIds = messages.getContent().stream().map(Message::getId).toList();
+        java.util.Map<UUID, List<MessageCitation>> citationsByMessage = messageIds.isEmpty()
+            ? java.util.Map.of()
+            : citationRepository.findByMessageIdInWithDocument(messageIds).stream()
+                .collect(Collectors.groupingBy(c -> c.getMessage().getId()));
+
         MessageListResponse resp = new MessageListResponse();
-        resp.setContent(messages.map(this::toMessageResponse).getContent());
+        resp.setContent(messages.map(m -> toMessageResponse(m, citationsByMessage.getOrDefault(m.getId(), List.of()))).getContent());
         resp.setPage(messages.getNumber());
         resp.setSize(messages.getSize());
         resp.setTotalElements(messages.getTotalElements());
@@ -175,10 +201,24 @@ public class ConversationController {
         resp.setUpdatedAt(conversation.getUpdatedAt());
         resp.setArchivedAt(conversation.getArchivedAt());
         resp.setMessageCount((int) messageRepository.countByConversationId(conversation.getId()));
+
+        if (conversation.getDocuments() != null) {
+            resp.setDocuments(conversation.getDocuments().stream().map(cd -> {
+                ConversationResponse.DocumentSummary summary = new ConversationResponse.DocumentSummary();
+                summary.setId(cd.getDocumentId());
+                if (cd.getDocument() != null) {
+                    summary.setOriginalFilename(cd.getDocument().getOriginalFilename());
+                }
+                return summary;
+            }).collect(Collectors.toList()));
+        } else {
+            resp.setDocuments(List.of());
+        }
+
         return resp;
     }
 
-    private MessageResponse toMessageResponse(Message message) {
+    private MessageResponse toMessageResponse(Message message, List<MessageCitation> citations) {
         MessageResponse resp = new MessageResponse();
         resp.setId(message.getId());
         resp.setRole(MessageResponse.MessageRole.valueOf(message.getRole().name()));
@@ -192,6 +232,17 @@ public class ConversationController {
             resp.setEvidenceStatus(MessageResponse.EvidenceStatus.valueOf(message.getEvidenceStatus().name()));
         }
         resp.setCreatedAt(message.getCreatedAt());
+        resp.setCitations(citations.stream().map(c -> {
+            MessageResponse.CitationResponse cr = new MessageResponse.CitationResponse();
+            cr.setChunkId(c.getChunk().getId());
+            cr.setDocumentId(c.getDocument().getId());
+            cr.setDocumentName(c.getDocument().getOriginalFilename());
+            cr.setPageNumber(c.getPageNumber());
+            cr.setExcerpt(c.getExcerpt());
+            cr.setRank(c.getRank());
+            cr.setCitationIndex(c.getCitationIndex());
+            return cr;
+        }).collect(Collectors.toList()));
         return resp;
     }
 }

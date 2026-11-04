@@ -23,6 +23,8 @@ spring:
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
+      keepalive-time: 30000
+      connection-test-query: SELECT 1
   jpa:
     hibernate:
       ddl-auto: validate
@@ -83,7 +85,7 @@ verityai:
     max-retries: ${GROQ_MAX_RETRIES:2}
     max-tokens: ${GROQ_MAX_TOKENS:4096}
   upload:
-    dir: ${UPLOAD_DIR:/var/lib/verityai/uploads}
+    dir: ${UPLOAD_DIR:uploads}
     max-file-size-mb: ${MAX_FILE_SIZE_MB:25}
     max-pages: ${MAX_PAGES:200}
   document:
@@ -91,7 +93,7 @@ verityai:
     chunk-overlap-chars: ${CHUNK_OVERLAP_CHARS:150}
   retrieval:
     top-k: ${RETRIEVAL_TOP_K:8}
-    min-rank: ${RETRIEVAL_MIN_RANK:0.1}
+    min-rank: ${RETRIEVAL_MIN_RANK:0.01}
   rate-limit:
     ai-requests-per-minute: ${RATE_LIMIT_AI_REQUESTS_PER_MINUTE:20}
     uploads-per-hour: ${RATE_LIMIT_UPLOADS_PER_HOUR:10}

@@ -1,5 +1,7 @@
 import type { ApiError } from '@/types/api';
 
+export * from '@/types/api';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 class ApiClient {
@@ -14,25 +16,64 @@ class ApiClient {
     this.csrfToken = token;
   }
 
+  private isMutating(method?: string): boolean {
+    return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method || 'GET');
+  }
+
+  private async ensureCsrf(): Promise<void> {
+    if (this.csrfToken) return;
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/csrf`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        this.csrfToken = data.token ?? null;
+      }
+    } catch {
+      return;
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const mutating = this.isMutating(options.method);
+
+    if (mutating) {
+      await this.ensureCsrf();
+    }
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (this.csrfToken && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method || 'GET')) {
+    if (mutating && this.csrfToken) {
       (headers as Record<string, string>)['X-XSRF-TOKEN'] = this.csrfToken;
     }
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       ...options,
       headers,
       credentials: 'include',
     });
+
+    if (mutating && response.status === 403) {
+      this.csrfToken = null;
+      await this.ensureCsrf();
+      const retryHeaders: Record<string, string> = { ...(headers as Record<string, string>) };
+      if (this.csrfToken) {
+        retryHeaders['X-XSRF-TOKEN'] = this.csrfToken;
+      } else {
+        delete retryHeaders['X-XSRF-TOKEN'];
+      }
+      response = await fetch(url, {
+        ...options,
+        headers: retryHeaders,
+        credentials: 'include',
+      });
+    }
 
     if (response.status === 204) {
       return undefined as T;
@@ -86,17 +127,34 @@ class ApiClient {
 
   async upload<T>(endpoint: string, formData: FormData): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const headers: HeadersInit = {};
+    await this.ensureCsrf();
+    const headers: Record<string, string> = {};
     if (this.csrfToken) {
-      (headers as Record<string, string>)['X-XSRF-TOKEN'] = this.csrfToken;
+      headers['X-XSRF-TOKEN'] = this.csrfToken;
     }
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'POST',
       headers,
       body: formData,
       credentials: 'include',
     });
+
+    if (response.status === 403) {
+      this.csrfToken = null;
+      await this.ensureCsrf();
+      if (this.csrfToken) {
+        headers['X-XSRF-TOKEN'] = this.csrfToken;
+      } else {
+        delete headers['X-XSRF-TOKEN'];
+      }
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+        credentials: 'include',
+      });
+    }
 
     if (response.status === 204) {
       return undefined as T;

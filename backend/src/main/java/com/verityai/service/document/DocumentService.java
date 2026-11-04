@@ -15,6 +15,8 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -64,6 +66,32 @@ public class DocumentService {
         }
     }
 
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void recoverStuckDocuments() {
+        try {
+            List<Document> stuckDocs = documentRepository.findByStatusInAndDeletedAtIsNull(
+                List.of(Document.DocumentStatus.PROCESSING, Document.DocumentStatus.UPLOADED)
+            );
+            if (!stuckDocs.isEmpty()) {
+                log.info("Found {} interrupted/stuck documents on startup, recovering...", stuckDocs.size());
+                for (Document doc : stuckDocs) {
+                    Path filePath = uploadPath.resolve(doc.getStoredFilename());
+                    if (Files.exists(filePath)) {
+                        log.info("Recovering document {} ({}), queuing for reprocessing...", doc.getId(), doc.getOriginalFilename());
+                        CompletableFuture.runAsync(() -> processDocument(doc.getId(), filePath));
+                    } else {
+                        doc.setStatus(Document.DocumentStatus.FAILED);
+                        doc.setErrorCode("INTERRUPTED");
+                        doc.setErrorMessage("Processing was interrupted when the server restarted and the file is not on disk");
+                        documentRepository.save(doc);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to recover stuck documents on startup", e);
+        }
+    }
+
     @Transactional
     public Document upload(UUID userId, MultipartFile file) {
         validateFile(file);
@@ -101,11 +129,24 @@ public class DocumentService {
 
         document = documentRepository.save(document);
 
-        // Process asynchronously
+        // Process asynchronously after the transaction commits
         Document savedDocument = document;
-        CompletableFuture.runAsync(() -> processDocument(savedDocument.getId(), filePath));
+        runAfterCommit(() -> processDocument(savedDocument.getId(), filePath));
 
         return document;
+    }
+
+    private void runAfterCommit(Runnable task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    CompletableFuture.runAsync(task);
+                }
+            });
+        } else {
+            CompletableFuture.runAsync(task);
+        }
     }
 
     private void validateFile(MultipartFile file) {
@@ -113,15 +154,15 @@ public class DocumentService {
             throw ApiException.validation("File is empty");
         }
         if (file.getSize() > maxFileSizeMb * 1024L * 1024L) {
-            throw ApiException.internal("File too large: max " + maxFileSizeMb + "MB");
+            throw ApiException.validation("File too large: max " + maxFileSizeMb + "MB");
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.equals("application/pdf")) {
-            throw ApiException.internal("Only PDF files are supported");
+            throw ApiException.validation("Only PDF files are supported");
         }
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
-            throw ApiException.internal("File must have .pdf extension");
+            throw ApiException.validation("File must have .pdf extension");
         }
     }
 
@@ -146,12 +187,19 @@ public class DocumentService {
 
     private void processDocument(UUID documentId, Path filePath) {
         Document document = documentRepository.findById(documentId).orElse(null);
-        if (document == null) return;
+        if (document == null) {
+            log.warn("Document {} not found for processing", documentId);
+            return;
+        }
 
         document.setStatus(Document.DocumentStatus.PROCESSING);
         documentRepository.save(document);
+        log.info("Starting processing for document {} at {}", documentId, filePath);
 
         try (PDDocument pdf = Loader.loadPDF(filePath.toFile())) {
+            if (pdf.isEncrypted()) {
+                throw new IllegalStateException("PDF is password-protected or encrypted");
+            }
             int pageCount = pdf.getNumberOfPages();
             if (pageCount > maxPages) {
                 throw new IllegalStateException("Document exceeds max pages: " + maxPages);
@@ -188,7 +236,7 @@ public class DocumentService {
             }
 
             if (chunks.isEmpty()) {
-                throw new IllegalStateException("No extractable text found in PDF");
+                throw new IllegalStateException("SCANNED_OR_EMPTY_PDF");
             }
 
             chunkRepository.saveAll(chunks);
@@ -199,12 +247,33 @@ public class DocumentService {
 
             log.info("Processed document {}: {} pages, {} chunks", documentId, pageCount, chunks.size());
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("Failed to process document {}", documentId, e);
-            document.setStatus(Document.DocumentStatus.FAILED);
-            document.setErrorCode("PROCESSING_FAILED");
-            document.setErrorMessage(e.getMessage());
-            documentRepository.save(document);
+            try {
+                Document fresh = documentRepository.findById(documentId).orElse(null);
+                if (fresh != null) {
+                    fresh.setStatus(Document.DocumentStatus.FAILED);
+
+                    String code = "PROCESSING_FAILED";
+                    String message = e.getMessage() != null ? e.getMessage() : "Unknown error during document processing";
+
+                    if ("SCANNED_OR_EMPTY_PDF".equals(message) || message.contains("No extractable text")) {
+                        code = "SCANNED_PDF_NO_TEXT";
+                        message = "No extractable digital text found. This document appears to be a scanned image or photo without selectable text. VerityAI requires digital text to ground answers with citations (OCR for scanned files is planned for a future update).";
+                    } else if (message.toLowerCase().contains("encrypted") || message.toLowerCase().contains("password")) {
+                        code = "ENCRYPTED_PDF";
+                        message = "This PDF is encrypted or password-protected. Please upload an unlocked PDF.";
+                    } else if (message.contains("exceeds max pages")) {
+                        code = "PAGE_LIMIT_EXCEEDED";
+                    }
+
+                    fresh.setErrorCode(code);
+                    fresh.setErrorMessage(message);
+                    documentRepository.save(fresh);
+                }
+            } catch (Exception saveEx) {
+                log.error("Failed to mark document {} as FAILED", documentId, saveEx);
+            }
         }
     }
 
@@ -231,8 +300,11 @@ public class DocumentService {
                 chunks.add(chunk);
             }
 
-            start = end - chunkOverlapChars;
-            if (start < 0) start = 0;
+            if (end >= length) {
+                break;
+            }
+
+            start = Math.max(end - chunkOverlapChars, start + 1);
         }
 
         return chunks;
@@ -248,8 +320,8 @@ public class DocumentService {
         Document document = documentRepository.findByIdAndUserIdAndDeletedAtIsNull(documentId, userId)
             .orElseThrow(() -> ApiException.notFound("Document not found"));
 
-        if (document.getStatus() != Document.DocumentStatus.FAILED) {
-            throw ApiException.validation("Only failed documents can be retried");
+        if (document.getStatus() == Document.DocumentStatus.READY) {
+            throw ApiException.validation("Document is already processed");
         }
 
         chunkRepository.deleteByDocumentId(documentId);
@@ -268,7 +340,7 @@ public class DocumentService {
             throw ApiException.internal("Original file missing");
         }
 
-        CompletableFuture.runAsync(() -> processDocument(documentId, filePath));
+        runAfterCommit(() -> processDocument(documentId, filePath));
 
         return document;
     }

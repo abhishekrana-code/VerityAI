@@ -3,7 +3,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Document } from '@/lib/api';
-import { ArrowLeft, Loader2, RotateCcw, Trash2, Download, Eye, FileText, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
@@ -19,6 +19,10 @@ export function DocumentDetailPage() {
     queryKey: ['document', id],
     queryFn: () => api.get<Document>(`/documents/${id}`),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      return (d?.status === 'PROCESSING' || d?.status === 'UPLOADED') ? 2000 : false;
+    },
   });
 
   const retryMutation = useMutation({
@@ -135,14 +139,22 @@ export function DocumentDetailPage() {
               )}
             </div>
             {doc.errorMessage && (
-              <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-                <div className="flex items-center gap-2 text-destructive mb-2">
+              <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20 space-y-2">
+                <div className="flex items-center gap-2 text-destructive">
                   <AlertCircle className="h-5 w-5" />
-                  <span className="font-medium">Processing Error</span>
+                  <span className="font-medium">
+                    {doc.errorCode === 'SCANNED_PDF_NO_TEXT' ? 'Scanned Document Detected' : 'Processing Error'}
+                  </span>
                 </div>
-                <p className="text-sm text-destructive">{doc.errorMessage}</p>
+                <p className="text-sm text-foreground/90">{doc.errorMessage}</p>
+                {doc.errorCode === 'SCANNED_PDF_NO_TEXT' && (
+                  <div className="mt-2 text-xs bg-background/60 p-2.5 rounded border border-border/50 text-muted-foreground space-y-1">
+                    <p className="font-semibold text-foreground">💡 How to use this document:</p>
+                    <p>VerityAI requires selectable digital text to accurately cite page numbers and quotes. For scanned images or receipts, run a free OCR conversion (e.g., Google Drive "Open with Google Docs" or Adobe Acrobat "Recognize Text") and save as a searchable PDF.</p>
+                  </div>
+                )}
                 {doc.errorCode && (
-                  <p className="mt-1 text-xs text-muted-foreground">Error code: {doc.errorCode}</p>
+                  <p className="text-xs text-muted-foreground">Error code: {doc.errorCode}</p>
                 )}
               </div>
             )}
@@ -154,10 +166,10 @@ export function DocumentDetailPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => retryMutation.mutate()}
-                disabled={retryMutation.isPending || doc.status !== 'FAILED'}
+                disabled={retryMutation.isPending || doc.status === 'READY'}
                 className={cn(
                   'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-                  doc.status === 'FAILED'
+                  doc.status !== 'READY'
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'
                 )}

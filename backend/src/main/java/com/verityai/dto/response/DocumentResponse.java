@@ -15,6 +15,7 @@ public class DocumentResponse {
     private Long sizeBytes;
     private Integer pageCount;
     private DocumentStatus status;
+    private String sha256;
     private String errorCode;
     private String errorMessage;
     private Instant createdAt;

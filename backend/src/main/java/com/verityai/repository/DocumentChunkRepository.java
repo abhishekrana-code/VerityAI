@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,27 +20,34 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
     Page<DocumentChunk> findByDocumentId(UUID documentId, Pageable pageable);
 
     @Query(value = """
-        SELECT dc.* FROM document_chunks dc
-        JOIN documents d ON dc.document_id = d.id
-        WHERE d.user_id = :userId
-          AND d.deleted_at IS NULL
-          AND dc.content_tsv @@ websearch_to_tsquery('english', :query)
-        ORDER BY ts_rank_cd(dc.content_tsv, websearch_to_tsquery('english', :query)) DESC
-        LIMIT :limit
-        """, nativeQuery = true)
-    List<DocumentChunk> fullTextSearch(@Param("userId") UUID userId, @Param("query") String query, @Param("limit") int limit);
-
-    @Query(value = """
-        SELECT dc.*, ts_rank_cd(dc.content_tsv, websearch_to_tsquery('english', :query)) as rank
+        SELECT dc.id, ts_rank_cd(dc.content_tsv, verity_or_tsquery(:query)) AS rank
         FROM document_chunks dc
         JOIN documents d ON dc.document_id = d.id
         WHERE d.user_id = :userId
           AND d.deleted_at IS NULL
-          AND dc.content_tsv @@ websearch_to_tsquery('english', :query)
+          AND dc.content_tsv @@ verity_or_tsquery(:query)
         ORDER BY rank DESC
         LIMIT :limit
         """, nativeQuery = true)
-    List<Object[]> fullTextSearchWithRank(@Param("userId") UUID userId, @Param("query") String query, @Param("limit") int limit);
+    List<Object[]> searchIdsWithRank(@Param("userId") UUID userId, @Param("query") String query, @Param("limit") int limit);
+
+    @Query(value = """
+        SELECT dc.id, ts_rank_cd(dc.content_tsv, verity_or_tsquery(:query)) AS rank
+        FROM document_chunks dc
+        JOIN documents d ON dc.document_id = d.id
+        WHERE d.user_id = :userId
+          AND d.deleted_at IS NULL
+          AND d.id IN (:docIds)
+          AND dc.content_tsv @@ verity_or_tsquery(:query)
+        ORDER BY rank DESC
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<Object[]> searchIdsWithRankScoped(
+        @Param("userId") UUID userId,
+        @Param("query") String query,
+        @Param("docIds") Collection<UUID> docIds,
+        @Param("limit") int limit
+    );
 
     long countByDocumentId(UUID documentId);
 

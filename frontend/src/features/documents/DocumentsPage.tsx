@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Document, type DocumentListResponse, type DocumentUploadResponse } from '@/lib/api';
-import { Upload, FileText, Loader2, Search, Filter, MoreVertical, Trash2, RotateCcw, Eye, Download } from 'lucide-react';
+import { Upload, FileText, Loader2, Search, Trash2, RotateCcw, ChevronLeft, ChevronRight, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useDropzone } from 'react-dropzone';
-import { Toast, ToastProvider, ToastViewport } from '@/components/ui/toast';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
 
 const STATUS_OPTIONS = ['All', 'UPLOADED', 'PROCESSING', 'READY', 'FAILED'] as const;
@@ -16,7 +16,7 @@ export function DocumentsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(20);
+  const [size] = useState(20);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<typeof STATUS_OPTIONS[number]>('All');
   const [sort, setSort] = useState('createdAt,desc');
@@ -34,6 +34,11 @@ export function DocumentsPage() {
       return api.get<DocumentListResponse>(`/documents?${params.toString()}`);
     },
     placeholderData: (prev) => prev,
+    refetchInterval: (query) => {
+      const docs = query.state.data?.content;
+      const hasPending = docs?.some((d) => d.status === 'PROCESSING' || d.status === 'UPLOADED');
+      return hasPending ? 2500 : false;
+    },
   });
 
   const uploadMutation = useMutation({
@@ -83,28 +88,6 @@ export function DocumentsPage() {
     maxSize: 25 * 1024 * 1024,
     disabled: uploading,
   });
-
-  const getStatusBadge = (status: Document['status']) => {
-    const variants = {
-      UPLOADED: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      PROCESSING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      READY: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      FAILED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    };
-    const icons = {
-      UPLOADED: Clock,
-      PROCESSING: Loader2,
-      READY: CheckCircle,
-      FAILED: AlertCircle,
-    };
-    const Icon = icons[status];
-    return (
-      <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium', variants[status])}>
-        <Icon className="h-3 w-3" />
-        {status}
-      </span>
-    );
-  };
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Delete "${name}"? This cannot be undone.`)) {
@@ -175,7 +158,7 @@ export function DocumentsPage() {
         <div className="rounded-xl border p-8 text-center text-destructive">
           Failed to load documents. <button onClick={() => queryClient.invalidateQueries({ queryKey: ['documents'] })} className="ml-2 underline">Retry</button>
         </div>
-      ) : data?.content.length === 0 ? (
+      ) : !data || data.content.length === 0 ? (
         <div {...getRootProps()} className={cn(
           'relative rounded-xl border-2 border-dashed p-12 text-center transition-colors',
           isDragActive ? 'border-primary bg-primary/5' : 'border-border'
@@ -268,7 +251,7 @@ function DocumentCard({ doc, onRetry, onDelete }: { doc: Document; onRetry: () =
         </div>
       )}
       <div className="flex items-center justify-end gap-2 pt-2 border-t">
-        {doc.status === 'FAILED' && (
+        {doc.status !== 'READY' && (
           <button
             onClick={onRetry}
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

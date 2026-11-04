@@ -29,6 +29,8 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
 
     List<Document> findByUserIdAndStatusInAndDeletedAtIsNull(UUID userId, List<Document.DocumentStatus> statuses);
 
+    List<Document> findByStatusInAndDeletedAtIsNull(List<Document.DocumentStatus> statuses);
+
     long countByUserIdAndDeletedAtIsNull(UUID userId);
 
     @Query("SELECT COUNT(d) FROM Document d WHERE d.user.id = :userId AND d.deletedAt IS NULL")

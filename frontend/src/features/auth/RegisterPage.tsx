@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Logo } from '@/components/Logo';
-import { useRegister, useCsrfToken } from '@/hooks/useAuth';
+import { useRegister } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -25,7 +24,6 @@ type RegisterForm = z.infer<typeof registerSchema>;
 export function RegisterPage() {
   const navigate = useNavigate();
   const { mutate: register, isPending, error } = useRegister();
-  const { data: csrf } = useCsrfToken();
 
   const {
     register: registerField,

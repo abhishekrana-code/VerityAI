@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Sparkles, Shield, Search, FileText, ArrowRight, CheckCircle, BookOpen } from 'lucide-react';
 import { Logo } from '@/components/Logo';
-import { cn } from '@/lib/utils';
 
 const features = [
   {
@@ -43,24 +42,24 @@ export function LandingPage() {
           <div className="flex h-16 items-center justify-between">
             <Logo />
             <nav className="hidden md:flex items-center gap-6">
-              <Link
+              <a
                 href="#features"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 Features
-              </Link>
-              <Link
+              </a>
+              <a
                 href="#how-it-works"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 How it works
-              </Link>
-              <Link
+              </a>
+              <a
                 href="#security"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 Security
-              </Link>
+              </a>
               <Link
                 to="/login"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -239,25 +238,25 @@ export function LandingPage() {
             <nav>
               <h4 className="font-semibold mb-3">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#features" className="hover:text-foreground">Features</Link></li>
-                <li><Link href="#how-it-works" className="hover:text-foreground">How it works</Link></li>
-                <li><Link href="#security" className="hover:text-foreground">Security</Link></li>
+                <li><a href="#features" className="hover:text-foreground">Features</a></li>
+                <li><a href="#how-it-works" className="hover:text-foreground">How it works</a></li>
+                <li><a href="#security" className="hover:text-foreground">Security</a></li>
               </ul>
             </nav>
             <nav>
               <h4 className="font-semibold mb-3">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground">About</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Blog</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Careers</Link></li>
+                <li><a href="#" className="hover:text-foreground">About</a></li>
+                <li><a href="#" className="hover:text-foreground">Blog</a></li>
+                <li><a href="#" className="hover:text-foreground">Careers</a></li>
               </ul>
             </nav>
             <nav>
               <h4 className="font-semibold mb-3">Legal</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground">Privacy</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Terms</Link></li>
-                <li><Link href="#" className="hover:text-foreground">Security</Link></li>
+                <li><a href="#" className="hover:text-foreground">Privacy</a></li>
+                <li><a href="#" className="hover:text-foreground">Terms</a></li>
+                <li><a href="#" className="hover:text-foreground">Security</a></li>
               </ul>
             </nav>
           </div>

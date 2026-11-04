@@ -3,18 +3,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Conversation, type ConversationListResponse, type Document } from '@/lib/api';
-import { Plus, Search, Loader2, Send, MessageSquare, FileText, Sparkles, X, ChevronDown, MoreVertical, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Search, Loader2, MessageSquare, FileText, Sparkles, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useDropzone } from 'react-dropzone';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
-import { useAuth } from '@/hooks/useAuth';
 
 export function WorkspacePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: auth } = useAuth();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [showNewConversation, setShowNewConversation] = useState(false);
@@ -42,7 +40,7 @@ export function WorkspacePage() {
 
   const createConversationMutation = useMutation({
     mutationFn: (data: { title: string; documentIds: string[] }) => api.post<Conversation>('/conversations', data),
-    onSuccess: (newConv) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setShowNewConversation(false);
       setNewConvTitle('');

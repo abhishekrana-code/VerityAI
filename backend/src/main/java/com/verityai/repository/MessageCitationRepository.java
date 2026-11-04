@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -13,6 +14,9 @@ import java.util.UUID;
 public interface MessageCitationRepository extends JpaRepository<MessageCitation, UUID> {
 
     List<MessageCitation> findByMessageIdOrderByCitationIndexAsc(UUID messageId);
+
+    @Query("SELECT mc FROM MessageCitation mc JOIN FETCH mc.document WHERE mc.message.id IN :ids ORDER BY mc.citationIndex")
+    List<MessageCitation> findByMessageIdInWithDocument(@Param("ids") Collection<UUID> messageIds);
 
     @Query("SELECT mc FROM MessageCitation mc WHERE mc.message.id = :messageId ORDER BY mc.citationIndex")
     List<MessageCitation> findByMessageId(UUID messageId);

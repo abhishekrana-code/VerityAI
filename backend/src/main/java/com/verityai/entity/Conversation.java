@@ -33,7 +33,7 @@ public class Conversation {
     @Column(name = "title", nullable = false, length = 500)
     private String title = "New Conversation";
 
-    @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private Set<ConversationDocument> documents = new HashSet<>();
 
     @CreationTimestamp

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type AuthResponse, type User, type CsrfResponse } from '@/lib/api';
+import { api, ApiException, type AuthResponse, type User, type CsrfResponse } from '@/lib/api';
 import type { RegisterRequest, LoginRequest, ChangePasswordRequest, UpdateProfileRequest } from '@/types/api';
 
 export function useAuth() {
@@ -21,7 +21,7 @@ export function useCsrfToken() {
 
 export function useRegister() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<AuthResponse, ApiException, RegisterRequest>({
     mutationFn: (data: RegisterRequest) => api.post<AuthResponse>('/auth/register', data),
     onSuccess: (response) => {
       queryClient.setQueryData(['auth', 'me'], response);
@@ -32,7 +32,7 @@ export function useRegister() {
 
 export function useLogin() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<AuthResponse, ApiException, LoginRequest>({
     mutationFn: (data: LoginRequest) => api.post<AuthResponse>('/auth/login', data),
     onSuccess: (response) => {
       queryClient.setQueryData(['auth', 'me'], response);

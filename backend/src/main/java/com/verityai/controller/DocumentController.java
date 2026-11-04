@@ -116,6 +116,7 @@ public class DocumentController {
         resp.setSizeBytes(document.getSizeBytes());
         resp.setPageCount(document.getPageCount());
         resp.setStatus(DocumentResponse.DocumentStatus.valueOf(document.getStatus().name()));
+        resp.setSha256(document.getSha256());
         resp.setErrorCode(document.getErrorCode());
         resp.setErrorMessage(document.getErrorMessage());
         resp.setCreatedAt(document.getCreatedAt());

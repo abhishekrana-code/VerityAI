@@ -8,11 +8,13 @@ import com.verityai.entity.MessageCitation;
 import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.DocumentRepository;
+import com.verityai.repository.ConversationRepository;
 import com.verityai.repository.MessageCitationRepository;
 import com.verityai.repository.MessageRepository;
 import com.verityai.service.retrieval.RetrievalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,13 @@ public class ChatService {
     private final DocumentRepository documentRepository;
     private final MessageRepository messageRepository;
     private final MessageCitationRepository citationRepository;
+    private final ConversationRepository conversationRepository;
+
+    @Value("${verityai.groq.model:openai/gpt-oss-20b}")
+    private String model;
+
+    @Value("${verityai.groq.max-tokens:4096}")
+    private int maxTokens;
 
     @Transactional
     public MessageResponse ask(Conversation conversation, String question, List<UUID> requestedDocIds) {
@@ -65,15 +74,15 @@ public class ChatService {
         userMessage.setStatus(Message.MessageStatus.COMPLETED);
         messageRepository.save(userMessage);
 
-        // Retrieve evidence
-        List<RetrievalService.RetrievedChunk> evidence = retrievalService.retrieve(userId, question);
+        // Retrieve evidence strictly scoped to requested/conversation documents
+        List<RetrievalService.RetrievedChunk> evidence = retrievalService.retrieve(userId, question, docIds.isEmpty() ? null : docIds);
 
         // Generate answer
         LlmService.ChatRequest chatRequest = new LlmService.ChatRequest(
             question,
             evidence,
-            "openai/gpt-oss-20b",
-            4096
+            model,
+            maxTokens
         );
 
         LlmService.ChatResponse llmResponse;
@@ -86,7 +95,7 @@ public class ChatService {
             errorMessage.setRole(Message.MessageRole.ASSISTANT);
             errorMessage.setContent("Error generating answer: " + e.getMessage());
             errorMessage.setStatus(Message.MessageStatus.FAILED);
-            errorMessage.setModel("openai/gpt-oss-20b");
+            errorMessage.setModel(model);
             messageRepository.save(errorMessage);
             throw ApiException.internal("Failed to generate answer");
         }
@@ -133,7 +142,7 @@ public class ChatService {
         citationRepository.saveAll(citations);
 
         // Update conversation timestamp
-        conversation.setUpdatedAt(Instant.now());
+        conversationRepository.touch(conversation.getId(), Instant.now());
 
         return toMessageResponse(assistantMessage, citations);
     }

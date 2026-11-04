@@ -21,10 +21,8 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  attribute = 'class',
   defaultTheme = 'system',
   enableSystem = true,
-  disableTransitionOnChange = false,
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState<Theme>(defaultTheme);
   const [mounted, setMounted] = React.useState(false);

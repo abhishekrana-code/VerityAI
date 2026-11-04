@@ -182,8 +182,12 @@ public class GroqLlmService implements LlmService {
 
     private List<Integer> extractCitations(String content) {
         List<Integer> indices = new ArrayList<>();
+        String normalized = content
+            .replace('\u3010', '[').replace('\u3011', ']')  // 【 】
+            .replace('\uFF3B', '[').replace('\uFF3D', ']')  // ［ ］
+            .replace('\u300C', '[').replace('\u300D', ']'); // 「 」
         Pattern pattern = Pattern.compile("\\[S(\\d+)\\]");
-        Matcher matcher = pattern.matcher(content);
+        Matcher matcher = pattern.matcher(normalized);
         while (matcher.find()) {
             try {
                 int idx = Integer.parseInt(matcher.group(1)) - 1;
@@ -200,7 +204,7 @@ public class GroqLlmService implements LlmService {
         Your answers must be grounded strictly in the provided evidence.
         Rules:
         1. Only use information from the EVIDENCE blocks. Do not use external knowledge.
-        2. Cite every claim using [S1], [S2], etc. matching the source numbers.
+        2. Cite every claim using plain ASCII square brackets like [S1], [S2], matching the source numbers. Never use other bracket styles.
         3. If evidence is insufficient, state: "Insufficient evidence to answer."
         4. Do not speculate, infer beyond the text, or hallucinate.
         5. Be concise and precise.

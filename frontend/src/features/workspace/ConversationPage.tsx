@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Message, type MessageListResponse, type Conversation } from '@/lib/api';
-import { ArrowLeft, Send, Loader2, Copy, Check, AlertCircle, FileText, ChevronDown, ChevronUp, MoreVertical, Sparkles } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Copy, Check, AlertCircle, FileText, MoreVertical, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { Markdown } from '@/components/ui/Markdown';
@@ -58,7 +58,7 @@ export function ConversationPage() {
       }));
       return { previousMessages };
     },
-    onError: (err, newQuestion, context) => {
+    onError: (err, _newQuestion, context) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(['messages', conversationId], context.previousMessages);
       }
