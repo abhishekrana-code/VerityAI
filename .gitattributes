@@ -1,0 +1,3 @@
+# Maven wrapper must be a shell script on Linux CI runners
+backend/mvnw text eol=lf
+*.sh text eol=lf

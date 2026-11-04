@@ -16,8 +16,6 @@ backend/.mvn/timing.properties
 backend/.mvn/wrapper/maven-wrapper.properties
 !backend/.mvn/wrapper/maven-wrapper.properties
 backend/HELP.md
-backend/mvnw
-backend/mvnw.cmd
 backend/src/main/resources/application-*.yml
 !backend/src/main/resources/application.yml
 !backend/src/main/resources/application-dev.yml
