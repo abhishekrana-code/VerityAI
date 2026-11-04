@@ -180,7 +180,7 @@ public class GroqLlmService implements LlmService {
         }
     }
 
-    private List<Integer> extractCitations(String content) {
+    List<Integer> extractCitations(String content) {
         List<Integer> indices = new ArrayList<>();
         String normalized = content
             .replace('\u3010', '[').replace('\u3011', ']')  // 【 】
