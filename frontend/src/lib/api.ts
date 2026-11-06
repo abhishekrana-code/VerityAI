@@ -183,6 +183,85 @@ export class ApiClient {
 
     return response.json();
   }
+
+  /**
+   * Upload with progress reporting (XHR — fetch has no upload progress events).
+   * Reuses the CSRF cookie/header contract, including one retry on 403.
+   */
+  async uploadWithProgress<T>(
+    endpoint: string,
+    formData: FormData,
+    onProgress?: (percent: number) => void
+  ): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    await this.ensureCsrf();
+
+    const send = (): Promise<XMLHttpRequest> =>
+      new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.withCredentials = true;
+        if (this.csrfToken) {
+          xhr.setRequestHeader('X-XSRF-TOKEN', this.csrfToken);
+        }
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+        xhr.onload = () => resolve(xhr);
+        xhr.onerror = () => reject(new NetworkUploadError());
+        xhr.send(formData);
+      });
+
+    let xhr = await send();
+    if (xhr.status === 403) {
+      this.csrfToken = null;
+      await this.ensureCsrf();
+      xhr = await send();
+    }
+
+    if (xhr.status === 204) {
+      return undefined as T;
+    }
+
+    const contentType = xhr.getResponseHeader('content-type');
+    const isJson = contentType?.includes('application/json');
+    const body = xhr.responseText;
+
+    if (xhr.status < 200 || xhr.status >= 300) {
+      let errorData: Record<string, unknown> = {};
+      if (isJson) {
+        try {
+          errorData = JSON.parse(body);
+        } catch {
+          errorData = {};
+        }
+      }
+      const apiError: ApiError = {
+        timestamp: new Date().toISOString(),
+        status: xhr.status,
+        code: (errorData.code as string) || 'ERROR',
+        message: (errorData.message as string) || 'An error occurred',
+        path: endpoint,
+        requestId: xhr.getResponseHeader('X-Request-ID') || '',
+        fieldErrors: errorData.fieldErrors as ApiError['fieldErrors'],
+      };
+      throw new ApiException(apiError);
+    }
+
+    if (!isJson) {
+      return undefined as T;
+    }
+    return JSON.parse(body) as T;
+  }
+}
+
+class NetworkUploadError extends Error {
+  constructor() {
+    super('Network error during upload');
+    this.name = 'NetworkUploadError';
+  }
 }
 
 export class ApiException extends Error {
