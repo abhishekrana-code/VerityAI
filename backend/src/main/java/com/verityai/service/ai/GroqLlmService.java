@@ -63,7 +63,7 @@ public class GroqLlmService implements LlmService {
         String prompt = buildPrompt(request.question(), request.evidence());
 
         GroqRequest groqRequest = new GroqRequest(
-            request.model(),
+            request.model() != null ? request.model() : model,
             List.of(
                 new GroqMessage("system", SYSTEM_PROMPT),
                 new GroqMessage("user", prompt)
@@ -73,6 +73,44 @@ public class GroqLlmService implements LlmService {
             1.0
         );
 
+        RawResponse raw = postChat(groqRequest);
+        return parseResponse(raw.body(), raw.latencyMs());
+    }
+
+    @Override
+    public CompletionResponse complete(CompletionRequest request) {
+        GroqRequest groqRequest = new GroqRequest(
+            request.model() != null ? request.model() : model,
+            List.of(
+                new GroqMessage("system", request.system()),
+                new GroqMessage("user", request.user())
+            ),
+            request.maxTokens(),
+            0.2,
+            1.0
+        );
+
+        RawResponse raw = postChat(groqRequest);
+        try {
+            JsonNode root = objectMapper.readTree(raw.body());
+            JsonNode choice = root.path("choices").get(0);
+            String content = choice.path("message").path("content").asText("");
+            JsonNode usage = root.path("usage");
+            return new CompletionResponse(
+                content,
+                usage.path("prompt_tokens").asInt(0),
+                usage.path("completion_tokens").asInt(0),
+                raw.latencyMs(),
+                model
+            );
+        } catch (Exception e) {
+            log.error("Failed to parse Groq completion response", e);
+            throw new GroqException("Failed to parse response", 0);
+        }
+    }
+
+    /** Shared HTTP transport with bounded retries for 429/5xx/network errors. */
+    private RawResponse postChat(GroqRequest groqRequest) {
         int attempt = 0;
         while (true) {
             try {
@@ -115,7 +153,7 @@ public class GroqLlmService implements LlmService {
                     throw new GroqException("Unexpected response: " + response.statusCode(), response.statusCode());
                 }
 
-                return parseResponse(response.body(), latencyMs);
+                return new RawResponse(response.body(), latencyMs);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -132,6 +170,8 @@ public class GroqLlmService implements LlmService {
             }
         }
     }
+
+    private record RawResponse(String body, int latencyMs) {}
 
     private String buildPrompt(String question, List<RetrievalService.RetrievedChunk> evidence) {
         StringBuilder sb = new StringBuilder();

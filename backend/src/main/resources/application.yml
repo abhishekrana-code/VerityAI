@@ -98,3 +98,16 @@ verityai:
     ai-requests-per-minute: ${RATE_LIMIT_AI_REQUESTS_PER_MINUTE:20}
     uploads-per-hour: ${RATE_LIMIT_UPLOADS_PER_HOUR:10}
     login-per-minute-ip: ${RATE_LIMIT_LOGIN_PER_MINUTE_IP:5}
+  summary:
+    enabled: ${SUMMARY_ENABLED:true}
+    # Optional dedicated model for summaries; empty = use GROQ_MODEL
+    model: ${SUMMARY_MODEL:}
+    # Documents longer than this go through hierarchical segment condensation
+    single-pass-chars: ${SUMMARY_SINGLE_PASS_CHARS:48000}
+    max-segments: ${SUMMARY_MAX_SEGMENTS:8}
+    # Reasoning models (gpt-oss) routinely spend 2000+ tokens reasoning before
+    # emitting content — budgets must leave room for that plus the answer.
+    max-tokens: ${SUMMARY_MAX_TOKENS:8000}
+    segment-max-tokens: ${SUMMARY_SEGMENT_MAX_TOKENS:8000}
+    # Cap on automatic backfill jobs per application start
+    backfill-limit: ${SUMMARY_BACKFILL_LIMIT:20}

@@ -52,4 +52,12 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
     long countByDocumentId(UUID documentId);
 
     void deleteByDocumentId(UUID documentId);
+
+    /** Chunk counts for a page of documents in one query (avoids N+1). */
+    @Query("""
+        SELECT c.document.id, COUNT(c) FROM DocumentChunk c
+        WHERE c.document.id IN :documentIds
+        GROUP BY c.document.id
+        """)
+    List<Object[]> countByDocumentIds(@Param("documentIds") java.util.Collection<UUID> documentIds);
 }

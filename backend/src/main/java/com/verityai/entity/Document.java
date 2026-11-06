@@ -69,7 +69,19 @@ public class Document {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /** AI summary lifecycle: NONE | PENDING | READY | FAILED (persisted, not in-memory). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "summary_status", nullable = false, length = 20)
+    private SummaryStatus summaryStatus = SummaryStatus.NONE;
+
+    @Column(name = "summary_error", length = 300)
+    private String summaryError;
+
     public enum DocumentStatus {
         UPLOADED, PROCESSING, READY, FAILED
+    }
+
+    public enum SummaryStatus {
+        NONE, PENDING, READY, FAILED
     }
 }

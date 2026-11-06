@@ -2,10 +2,12 @@ package com.verityai.service.document;
 
 import com.verityai.entity.Document;
 import com.verityai.entity.DocumentChunk;
+import com.verityai.entity.DocumentProcessingEvent;
 import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.DocumentChunkRepository;
 import com.verityai.repository.DocumentRepository;
+import com.verityai.service.summary.SummaryService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,8 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository chunkRepository;
+    private final ProcessingEventService processingEventService;
+    private final com.verityai.service.summary.SummaryService summaryService;
 
     @Value("${verityai.upload.dir:/var/lib/verityai/uploads}")
     private String uploadDir;
@@ -128,6 +132,7 @@ public class DocumentService {
         document.setStatus(Document.DocumentStatus.UPLOADED);
 
         document = documentRepository.save(document);
+        processingEventService.recordUploaded(document.getId());
 
         // Process asynchronously after the transaction commits
         Document savedDocument = document;
@@ -194,9 +199,11 @@ public class DocumentService {
 
         document.setStatus(Document.DocumentStatus.PROCESSING);
         documentRepository.save(document);
-        log.info("Starting processing for document {} at {}", documentId, filePath);
+        int attempt = processingEventService.beginAttempt(documentId);
+        log.info("Starting processing for document {} at {} (attempt {})", documentId, filePath, attempt);
 
         try (PDDocument pdf = Loader.loadPDF(filePath.toFile())) {
+            processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.EXTRACTING);
             if (pdf.isEncrypted()) {
                 throw new IllegalStateException("PDF is password-protected or encrypted");
             }
@@ -239,13 +246,19 @@ public class DocumentService {
                 throw new IllegalStateException("SCANNED_OR_EMPTY_PDF");
             }
 
+            processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.CHUNKING);
+            processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.INDEXING);
             chunkRepository.saveAll(chunks);
 
             document.setPageCount(pageCount);
             document.setStatus(Document.DocumentStatus.READY);
             documentRepository.save(document);
+            processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.COMPLETED);
 
             log.info("Processed document {}: {} pages, {} chunks", documentId, pageCount, chunks.size());
+
+            // AI summaries are generated asynchronously after indexing succeeds
+            summaryService.schedule(documentId);
 
         } catch (Throwable e) {
             log.error("Failed to process document {}", documentId, e);
@@ -270,6 +283,7 @@ public class DocumentService {
                     fresh.setErrorCode(code);
                     fresh.setErrorMessage(message);
                     documentRepository.save(fresh);
+                    processingEventService.recordFailure(documentId, attempt, code, message);
                 }
             } catch (Exception saveEx) {
                 log.error("Failed to mark document {} as FAILED", documentId, saveEx);
@@ -325,6 +339,8 @@ public class DocumentService {
         }
 
         chunkRepository.deleteByDocumentId(documentId);
+        // Reprocessing invalidates any summaries derived from the old chunks
+        summaryService.regenerateReset(documentId);
 
         document.setStatus(Document.DocumentStatus.UPLOADED);
         document.setErrorCode(null);
@@ -337,6 +353,9 @@ public class DocumentService {
             document.setErrorCode("FILE_MISSING");
             document.setErrorMessage("Original file not found on disk");
             documentRepository.save(document);
+            processingEventService.recordFailure(documentId,
+                processingEventService.nextAttempt(documentId), "FILE_MISSING",
+                "Original file not found on disk");
             throw ApiException.conflict(
                 "Original PDF file is missing on the server - delete this document and re-upload it");
         }
@@ -344,6 +363,11 @@ public class DocumentService {
         runAfterCommit(() -> processDocument(documentId, filePath));
 
         return document;
+    }
+
+    /** Absolute path of a document's stored PDF (used by the preview endpoint). */
+    public Path resolvePath(Document document) {
+        return uploadPath.resolve(document.getStoredFilename());
     }
 
     @Transactional
