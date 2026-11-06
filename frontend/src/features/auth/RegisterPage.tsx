@@ -44,15 +44,16 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4 py-12">
+    <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-12">
+      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-500/10 blur-[100px]" />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Logo />
+          <div className="flex justify-center"><Logo to="/" /></div>
           <h1 className="mt-6 text-2xl font-bold">Create your account</h1>
           <p className="mt-2 text-muted-foreground">Start researching with evidence-based answers</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
+        <form onSubmit={handleSubmit(onSubmit)} className="surface-card space-y-5 p-6 sm:p-8" noValidate>
           {error && (
             <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />

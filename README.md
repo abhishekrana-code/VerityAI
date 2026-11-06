@@ -166,3 +166,25 @@ Key production settings:
 ## License
 
 MIT — see LICENSE file.
+## Premium UI refresh
+
+The frontend now uses a premium dark visual system by default, with a saved light/system theme option. The refresh updates the shared application shell, navigation, brand mark, landing experience, dashboard, authentication screens, and research conversation styling while retaining the existing React Router routes, API client, React Query data flows, and Spring Boot backend.
+
+### Frontend setup
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+### Frontend validation
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+The redesign does not introduce new backend endpoints or replace the existing LLM/RAG integration.

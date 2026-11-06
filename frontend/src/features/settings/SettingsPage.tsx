@@ -10,6 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
+import { useTheme } from '@/components/ThemeProvider';
 
 const profileSchema = z.object({
   displayName: z.string().max(100).optional(),
@@ -32,6 +33,7 @@ export function SettingsPage() {
   const { data: auth } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'preferences'>('profile');
+  const { theme, setTheme } = useTheme();
 
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
@@ -197,18 +199,21 @@ export function SettingsPage() {
               <div>
                 <h3 className="font-medium mb-4">Theme</h3>
                 <div className="grid grid-cols-3 gap-4">
-                  {['light', 'dark', 'system'].map((theme) => (
+                  {(['light', 'dark', 'system'] as const).map((themeOption) => (
                     <button
-                      key={theme}
+                      key={themeOption}
+                      type="button"
+                      onClick={() => setTheme(themeOption)}
+                      aria-pressed={theme === themeOption}
                       className={cn(
-                        'flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors',
-                        'hover:border-primary/50'
+                        'flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors',
+                        theme === themeOption ? 'border-primary bg-primary/10' : 'hover:border-primary/50'
                       )}
                     >
-                      {theme === 'light' && <Sun className="h-8 w-8 text-amber-500" />}
-                      {theme === 'dark' && <Moon className="h-8 w-8 text-blue-500" />}
-                      {theme === 'system' && <Monitor className="h-8 w-8 text-muted-foreground" />}
-                      <span className="capitalize font-medium">{theme}</span>
+                      {themeOption === 'light' && <Sun className="h-8 w-8 text-amber-500" />}
+                      {themeOption === 'dark' && <Moon className="h-8 w-8 text-blue-500" />}
+                      {themeOption === 'system' && <Monitor className="h-8 w-8 text-muted-foreground" />}
+                      <span className="capitalize font-medium">{themeOption}</span>
                     </button>
                   ))}
                 </div>

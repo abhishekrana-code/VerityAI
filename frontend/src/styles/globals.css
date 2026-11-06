@@ -1,68 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    color-scheme: dark;
+    --background: 224 42% 7%;
+    --foreground: 220 25% 94%;
+    --card: 222 34% 10%;
+    --card-foreground: 220 25% 94%;
+    --popover: 222 34% 10%;
+    --popover-foreground: 220 25% 94%;
+    --primary: 231 94% 70%;
+    --primary-foreground: 225 50% 10%;
+    --secondary: 220 25% 16%;
+    --secondary-foreground: 220 25% 92%;
+    --muted: 220 25% 14%;
+    --muted-foreground: 218 14% 62%;
+    --accent: 222 25% 17%;
+    --accent-foreground: 220 25% 95%;
+    --destructive: 0 68% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 23% 19%;
+    --input: 220 23% 21%;
+    --ring: 231 94% 70%;
+    --radius: 0.85rem;
     --font-sans: 'Inter', system-ui, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    color-scheme: dark;
+    --background: 224 42% 7%;
+    --foreground: 220 25% 94%;
+    --card: 222 34% 10%;
+    --card-foreground: 220 25% 94%;
+    --popover: 222 34% 10%;
+    --popover-foreground: 220 25% 94%;
+    --primary: 231 94% 70%;
+    --primary-foreground: 225 50% 10%;
+    --secondary: 220 25% 16%;
+    --secondary-foreground: 220 25% 92%;
+    --muted: 220 25% 14%;
+    --muted-foreground: 218 14% 62%;
+    --accent: 222 25% 17%;
+    --accent-foreground: 220 25% 95%;
+    --destructive: 0 68% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 23% 19%;
+    --input: 220 23% 21%;
+    --ring: 231 94% 70%;
   }
+
+  .light {
+    color-scheme: light;
+    --background: 220 33% 98%;
+    --foreground: 224 35% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 35% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 35% 12%;
+    --primary: 231 82% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 24% 94%;
+    --secondary-foreground: 224 35% 15%;
+    --muted: 220 24% 94%;
+    --muted-foreground: 218 12% 43%;
+    --accent: 220 24% 93%;
+    --accent-foreground: 224 35% 15%;
+    --destructive: 0 70% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 18% 87%;
+    --input: 220 18% 85%;
+    --ring: 231 82% 58%;
+  }
+
+  * { @apply border-border; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    background-image: radial-gradient(ellipse at 12% 0%, hsl(231 75% 22% / 0.14), transparent 34%),
+      radial-gradient(ellipse at 88% 12%, hsl(258 75% 25% / 0.10), transparent 30%);
+    min-width: 320px;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.035em; }
+  button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: hsl(231 94% 70% / 0.28); }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+@layer components {
+  .surface-card {
+    @apply rounded-2xl border bg-card shadow-sm;
+    box-shadow: 0 12px 36px hsl(224 55% 3% / 0.12), inset 0 1px 0 hsl(0 0% 100% / 0.025);
   }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+  }
+  .page-heading {
+    @apply text-3xl font-bold tracking-tight sm:text-[2rem];
+  }
+  .premium-input {
+    @apply rounded-xl border border-input bg-background/80 text-foreground shadow-inner outline-none transition;
+  }
+  .premium-input:focus {
+    border-color: hsl(var(--ring) / 0.8);
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.13);
   }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .text-balance { text-wrap: balance; }
+  .glass-panel {
+    background: hsl(var(--card) / 0.76);
+    backdrop-filter: blur(18px);
   }
+  .subtle-grid {
+    background-image: linear-gradient(hsl(var(--border) / 0.32) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.32) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+  }
+}
+
+/* Consistent premium treatment for existing feature pages. */
+#root main input:not([type='checkbox']):not([type='radio']),
+#root main textarea,
+#root form input:not([type='checkbox']):not([type='radio']) {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+#root main input:focus-visible,
+#root main textarea:focus-visible,
+#root main select:focus-visible,
+#root main button:focus-visible,
+#root aside button:focus-visible,
+#root aside a:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.85);
+  outline-offset: 2px;
+}
+#root main .rounded-xl.border,
+#root main .rounded-2xl.border { box-shadow: 0 10px 30px hsl(224 55% 3% / 0.10); }
+#root main button { transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
+#root main button:active { transform: translateY(1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

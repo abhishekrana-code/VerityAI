@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Conversation, type ConversationListResponse, type Document } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
@@ -20,6 +21,7 @@ export function WorkspacePage() {
   const [newConvTitle, setNewConvTitle] = useState('');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
 
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations', page, search],
@@ -41,12 +43,13 @@ export function WorkspacePage() {
 
   const createConversationMutation = useMutation({
     mutationFn: (data: { title: string; documentIds: string[] }) => api.post<Conversation>('/conversations', data),
-    onSuccess: () => {
+    onSuccess: (conversation: Conversation) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setShowNewConversation(false);
       setNewConvTitle('');
       setSelectedDocIds([]);
       toast({ title: 'Conversation created', description: 'Start researching now' });
+      navigate(`/dashboard/workspace/${conversation.id}`);
     },
     onError: () => toast({ title: 'Failed to create conversation', variant: 'destructive' }),
   });
@@ -255,8 +258,20 @@ export function WorkspacePage() {
 }
 
 function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: () => void }) {
+  const navigate = useNavigate();
   return (
-    <div className="flex items-center gap-4 rounded-xl border p-4 hover:border-primary/50 hover:bg-accent/50 transition-colors group">
+    <div
+      onClick={() => navigate(`/dashboard/workspace/${conv.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          navigate(`/dashboard/workspace/${conv.id}`);
+        }
+      }}
+      role="link"
+      tabIndex={0}
+      className="flex items-center gap-4 rounded-xl border p-4 hover:border-primary/50 hover:bg-accent/50 transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <MessageSquare className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex-shrink-0 flex items-center justify-center" />
       <div className="flex-1 min-w-0">
         <h3 className="font-medium truncate">{conv.title}</h3>
@@ -278,7 +293,14 @@ function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: ()
         )}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button className="p-2 rounded-lg hover:bg-accent" title="Delete" onClick={onDelete}>
+        <button
+          className="p-2 rounded-lg hover:bg-accent"
+          title="Delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
           <Trash2 className="h-4 w-4 text-muted-foreground" />
         </button>
       </div>

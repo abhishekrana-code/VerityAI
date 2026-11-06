@@ -115,7 +115,7 @@ export function ConversationPage() {
   return (
     <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6 pb-4 border-b">
+      <div className="mb-6 flex items-center gap-4 border-b border-border/70 pb-4">
         <button onClick={() => navigate('/dashboard/workspace')} className="p-2 rounded-lg hover:bg-accent">
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -170,7 +170,7 @@ export function ConversationPage() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="border-t pt-4">
+      <form onSubmit={handleSubmit} className="sticky bottom-0 border-t border-border/70 bg-background/90 pt-4 backdrop-blur-xl">
         <div className="relative">
           <textarea
             ref={textareaRef}
@@ -178,7 +178,7 @@ export function ConversationPage() {
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Ask a question about your documents..."
             rows={1}
-            className="w-full min-h-[56px] max-h-64 rounded-xl border border-input bg-background px-4 py-3 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground disabled:opacity-50"
+            className="premium-input min-h-[56px] w-full resize-none rounded-2xl px-4 py-3 pr-14 text-sm placeholder:text-muted-foreground disabled:opacity-50"
             disabled={askMutation.isPending}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -217,8 +217,8 @@ function MessageBubble({ message, onCopy, onToggleSources, showSources }: { mess
     <div className={cn('flex gap-3', isUser ? 'flex-row-reverse' : '')}>
       <div className={cn('flex-1 max-w-[85%]', isUser ? 'text-right' : '')}>
         <div className={cn(
-          'inline-block rounded-2xl px-4 py-3',
-          isUser ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-muted rounded-tl-sm'
+          'inline-block rounded-2xl border px-4 py-3 shadow-sm',
+          isUser ? 'border-indigo-300/15 bg-primary text-primary-foreground rounded-tr-sm' : 'border-border/70 bg-card rounded-tl-sm'
         )}>
           <Markdown>{message.content}</Markdown>
           {message.evidenceStatus && message.evidenceStatus !== 'NONE' && (
