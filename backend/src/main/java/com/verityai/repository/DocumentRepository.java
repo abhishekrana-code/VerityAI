@@ -5,9 +5,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -36,4 +38,24 @@ public interface DocumentRepository extends JpaRepository<Document, UUID>, JpaSp
 
     @Query("SELECT COUNT(d) FROM Document d WHERE d.user.id = :userId AND d.deletedAt IS NULL")
     long countByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Status-only update for the asynchronous processing thread. It never
+     * touches {@code deletedAt}, so a document deleted while it was being
+     * processed cannot be resurrected by a stale entity merge. Returns 0 when
+     * the row no longer exists or was soft-deleted.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE Document d SET d.status = :status WHERE d.id = :id AND d.deletedAt IS NULL")
+    int updateStatusIfNotDeleted(@Param("id") UUID id, @Param("status") Document.DocumentStatus status);
+
+    /** Same guarantee as {@link #updateStatusIfNotDeleted}, plus page count. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE Document d SET d.status = :status, d.pageCount = :pageCount " +
+           "WHERE d.id = :id AND d.deletedAt IS NULL")
+    int updateProcessingResult(@Param("id") UUID id,
+                               @Param("status") Document.DocumentStatus status,
+                               @Param("pageCount") Integer pageCount);
 }

@@ -94,6 +94,22 @@ verityai:
   retrieval:
     top-k: ${RETRIEVAL_TOP_K:8}
     min-rank: ${RETRIEVAL_MIN_RANK:0.01}
+    # Phase 2: fuse full-text + cosine (RRF); false = keyword-only, identical
+    # to pre-Phase-2 retrieval.
+    hybrid: ${RETRIEVAL_HYBRID:true}
+    rrf-k: ${RETRIEVAL_RRF_K:60}
+    min-similarity: ${RETRIEVAL_MIN_SIMILARITY:0.10}
+  search:
+    max-results: ${SEARCH_MAX_RESULTS:30}
+    default-results: ${SEARCH_DEFAULT_RESULTS:20}
+  verify:
+    # Claim-level citation verification (Feature 6)
+    enabled: ${VERIFY_ENABLED:true}
+    # Optional dedicated model; empty = chat model
+    model: ${VERIFY_MODEL:}
+    # Cap on claims analyzed per message (extra claims are reported as unanalyzed)
+    max-claims: ${VERIFY_MAX_CLAIMS:25}
+    max-tokens: ${VERIFY_MAX_TOKENS:2500}
   rate-limit:
     ai-requests-per-minute: ${RATE_LIMIT_AI_REQUESTS_PER_MINUTE:20}
     uploads-per-hour: ${RATE_LIMIT_UPLOADS_PER_HOUR:10}
@@ -111,3 +127,18 @@ verityai:
     segment-max-tokens: ${SUMMARY_SEGMENT_MAX_TOKENS:8000}
     # Cap on automatic backfill jobs per application start
     backfill-limit: ${SUMMARY_BACKFILL_LIMIT:20}
+  embeddings:
+    # onnx = local model (no external API); off = keyword search only
+    provider: ${EMBEDDINGS_PROVIDER:onnx}
+    dimensions: 384
+    max-input-chars: ${EMBEDDINGS_MAX_INPUT_CHARS:2000}
+    # Pinned revision of Xenova/all-MiniLM-L6-v2; checksums verified on every
+    # load so a changed upstream file is rejected instead of silently used.
+    model-url: https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/751bff37182d3f1213fa05d7196b954e230abad9/onnx/model_quantized.onnx
+    model-sha256: afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1
+    tokenizer-url: https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/751bff37182d3f1213fa05d7196b954e230abad9/tokenizer.json
+    tokenizer-sha256: da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0
+    cache-dir: ${EMBEDDINGS_CACHE_DIR:${user.home}/.verityai/models}
+    connect-timeout-ms: ${EMBEDDINGS_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${EMBEDDINGS_READ_TIMEOUT_MS:60000}
+    download-timeout-ms: ${EMBEDDINGS_DOWNLOAD_TIMEOUT_MS:180000}

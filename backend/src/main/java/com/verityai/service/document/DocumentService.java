@@ -31,7 +31,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +41,8 @@ public class DocumentService {
     private final DocumentChunkRepository chunkRepository;
     private final ProcessingEventService processingEventService;
     private final com.verityai.service.summary.SummaryService summaryService;
+    private final com.verityai.service.embedding.EmbeddingIndexService embeddingIndexService;
+    private final com.verityai.config.ProcessingConfig.ProcessingExecutor processingExecutor;
 
     @Value("${verityai.upload.dir:/var/lib/verityai/uploads}")
     private String uploadDir;
@@ -82,7 +83,7 @@ public class DocumentService {
                     Path filePath = uploadPath.resolve(doc.getStoredFilename());
                     if (Files.exists(filePath)) {
                         log.info("Recovering document {} ({}), queuing for reprocessing...", doc.getId(), doc.getOriginalFilename());
-                        CompletableFuture.runAsync(() -> processDocument(doc.getId(), filePath));
+                        processingExecutor.submit(() -> processDocument(doc.getId(), filePath));
                     } else {
                         doc.setStatus(Document.DocumentStatus.FAILED);
                         doc.setErrorCode("INTERRUPTED");
@@ -146,11 +147,11 @@ public class DocumentService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    CompletableFuture.runAsync(task);
+                    processingExecutor.submit(task);
                 }
             });
         } else {
-            CompletableFuture.runAsync(task);
+            processingExecutor.submit(task);
         }
     }
 
@@ -197,8 +198,13 @@ public class DocumentService {
             return;
         }
 
-        document.setStatus(Document.DocumentStatus.PROCESSING);
-        documentRepository.save(document);
+        // Conditional status update: if the document was deleted after it was
+        // queued, this affects 0 rows and we stop instead of resurrecting it
+        // through a stale entity merge (soft delete keeps the row).
+        if (documentRepository.updateStatusIfNotDeleted(documentId, Document.DocumentStatus.PROCESSING) == 0) {
+            log.info("Document {} was deleted before processing started; skipping", documentId);
+            return;
+        }
         int attempt = processingEventService.beginAttempt(documentId);
         log.info("Starting processing for document {} at {} (attempt {})", documentId, filePath, attempt);
 
@@ -250,9 +256,15 @@ public class DocumentService {
             processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.INDEXING);
             chunkRepository.saveAll(chunks);
 
-            document.setPageCount(pageCount);
-            document.setStatus(Document.DocumentStatus.READY);
-            documentRepository.save(document);
+            // Phase 2: semantic indexing during INDEXING (best-effort — failures
+            // leave embeddings NULL and are retried by the backfill; retrieval
+            // degrades gracefully to keyword search meanwhile).
+            embeddingIndexService.embedDocument(documentId);
+
+            // Targeted update (status + page count only) so a concurrent soft
+            // delete cannot be undone by this stale entity.
+            documentRepository.updateProcessingResult(
+                documentId, Document.DocumentStatus.READY, pageCount);
             processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.COMPLETED);
 
             log.info("Processed document {}: {} pages, {} chunks", documentId, pageCount, chunks.size());

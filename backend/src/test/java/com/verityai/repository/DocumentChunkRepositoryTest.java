@@ -32,7 +32,7 @@ class DocumentChunkRepositoryTest {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("pgvector/pgvector:0.8.7-pg17");
 
     @Autowired private UserRepository userRepository;
     @Autowired private DocumentRepository documentRepository;
