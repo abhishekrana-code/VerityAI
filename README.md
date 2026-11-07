@@ -71,8 +71,8 @@ npm run dev
 verity-ai/
 ├─ frontend/          # React SPA
 ├─ backend/           # Spring Boot API
-├─ docs/              # Architecture, implementation plan, deployment runbook
-├─ docker-compose.yml # Postgres 17 (dev database)
+├─ docs/              # Architecture, API reference, testing, deployment runbook
+├─ docker-compose.yml # Postgres 17 + pgvector (dev database)
 ├─ .env.example       # Template for environment variables
 └─ README.md          # This file
 ```
@@ -84,8 +84,11 @@ verity-ai/
 - **Evidence-based answers** — Every claim cites a document chunk with page number
 - **Document library** — Upload, process, search, retry failed PDFs
 - **Research workspace** — Chat interface with citation panel, conversation history
+- **Hybrid semantic search** (Phase 2) — Local ONNX embeddings + PostgreSQL pgvector fused with full-text search (RRF); degrades honestly to keyword-only when the model is unavailable
+- **Multi-document research chat** (Phase 2) — Ask across several PDFs at once; sources are compared explicitly and cited per claim; context documents can be added/removed at any time
+- **Claim verification** (Phase 2) — Deterministic citation coverage + AI grounding classes (Supported / Partially supported / Unsupported / Conflicting) with clickable page-level citation jumps into the PDF
 - **Secure by default** — Session auth, HttpOnly cookies, CSRF, ownership enforcement
-- **Rate limited** — Per-IP login and per-user upload/AI quotas return 429 with `Retry-After`
+- **Rate limited** — Per-IP *and* per-account login limits, per-user upload/AI quotas return 429 with `Retry-After`
 - **Observable** — Structured logs, request IDs, health endpoints, Actuator metrics
 
 ---
@@ -110,7 +113,12 @@ verity-ai/
 See `.env.example` for all options. Minimum required:
 - `GROQ_API_KEY` — from https://console.groq.com/keys (chat fails without it)
 
-Everything else has working defaults. Note: the backend's JDBC credentials
+Everything else has working defaults. Phase 2 additions (all optional):
+- `EMBEDDINGS_PROVIDER=onnx|off` — local embeddings; `off` = keyword-only search
+- `RETRIEVAL_HYBRID`, `RETRIEVAL_MIN_SIMILARITY` — semantic branch tuning
+- `VERIFY_ENABLED`, `VERIFY_MODEL`, `VERIFY_MAX_CLAIMS`, `VERIFY_MAX_TOKENS` — claim verification
+
+Note: the backend's JDBC credentials
 are set in `backend/src/main/resources/application.yml` — keep
 `POSTGRES_PASSWORD` at its default (`verityai_dev`), or change both together.
 
@@ -118,11 +126,15 @@ are set in `backend/src/main/resources/application.yml` — keep
 
 ## Testing & CI
 
-- **Backend**: 39 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 in Docker).
-  Run `cd backend && .\mvnw.cmd test` (Docker must be running).
+- **Backend**: 106 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
+  Run `cd backend && .\mvnw.cmd test` (Docker must be running). See [docs/testing.md](docs/testing.md).
 - **Frontend**: 12 tests — Vitest + jsdom. Run `cd frontend && npm test`.
 - **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend) and lint/typecheck/test/build
   (frontend) on every push. Testcontainers requires a Docker-capable runner.
+
+The Groq LLM is never called from tests (mocked); the ONNX embedding model is
+downloaded once, SHA-256 verified, and cached locally — semantic tests skip
+honestly when it is unavailable.
 
 ---
 
@@ -142,9 +154,15 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 | GET/DELETE | `/documents/{id}`, `/documents/{id}/status` | Detail, processing status, delete |
 | POST | `/documents/{id}/retry` | Re-run failed processing |
 | GET/POST | `/conversations` | List / create |
-| GET/PATCH/DELETE | `/conversations/{id}` | Detail, rename/archive, delete |
+| GET/PATCH/DELETE | `/conversations/{id}` | Detail, rename/archive, edit document context, delete |
 | GET/POST | `/conversations/{id}/messages` | Read history / ask a question (RAG + citations) |
+| GET/POST | `/conversations/{id}/messages/{messageId}/verify` | Read stored claim verification / run it (bounded model call) |
+| POST | `/search` | Hybrid semantic + keyword search over your documents |
+| GET/POST/PATCH/DELETE | `/tags`, `/tags/{id}` | Tag management |
+| GET/POST/PATCH/DELETE | `/collections`… | Collection management (see [docs/api.md](docs/api.md)) |
 | GET | `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness` | Probes (unauthenticated) |
+
+Full request/response shapes: **[docs/api.md](docs/api.md)**.
 
 Error responses share one envelope: `{ code, message, fieldErrors?, requestId }`.
 Rate-limited responses (429) additionally carry a `Retry-After` header.

@@ -85,6 +85,21 @@ sudo mkdir -p /var/www/verityai
 sudo cp -r dist/* /var/www/verityai/
 ```
 
+> **Upgrading an existing install (Phase 2):** `docker-compose.yml` now uses
+> the `pgvector/pgvector` image (PostgreSQL 17 + the `vector` extension).
+> Recreating the container is enough — Flyway applies `V5` automatically on
+> first backend start. If the old container was `postgres:17-alpine`, its data
+> directory is owned by uid 70 while the pgvector image runs as uid 999; fix
+> the ownership once, without touching your data:
+>
+> ```bash
+> docker stop verityai-postgres
+> docker run --rm -v verityai_postgres_data:/data alpine chown -R 999:999 /data
+> docker compose up -d postgres   # recreates the container on the pgvector image
+> ```
+>
+> Take a `pg_dump` backup first if this is anything but a dev machine.
+
 ## 5. Backend as a systemd Service
 
 `/etc/systemd/system/verityai.service`:
