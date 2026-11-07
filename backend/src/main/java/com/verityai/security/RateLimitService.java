@@ -56,6 +56,19 @@ public class RateLimitService {
                 "Too many login attempts, please try again later", 60);
     }
 
+    /**
+     * Consumes one login attempt for the targeted account (any IP); 429 when
+     * exhausted. Complements the IP limit: it stops credential stuffing of one
+     * account across many IPs without letting one attacker exhaust others.
+     */
+    public void checkLoginAccount(String email) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        acquire("loginacct", email.trim().toLowerCase(java.util.Locale.ROOT), loginConfig,
+                ErrorCode.RATE_LIMITED, "Too many login attempts, please try again later", 60);
+    }
+
     /** Consumes one upload slot for this user; 429 when exhausted. */
     public void checkUpload(UUID userId) {
         acquire("upload", userId.toString(), uploadConfig, ErrorCode.RATE_LIMITED,

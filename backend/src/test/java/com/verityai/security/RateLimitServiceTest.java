@@ -89,4 +89,34 @@ class RateLimitServiceTest {
             service.checkAiRequest(user);
         }
     }
+
+    @Test
+    void loginAttemptsAreLimitedPerAccountAcrossIps() {
+        RateLimitService service = new RateLimitService(1, 10, 10);
+
+        service.checkLoginAccount("victim@example.com");
+
+        // Same account from any IP (and any casing) is still capped
+        assert429(() -> service.checkLoginAccount("Victim@Example.com"),
+            ErrorCode.RATE_LIMITED, 60);
+    }
+
+    @Test
+    void accountLimitIsIndependentOfIpLimitAndOtherAccounts() {
+        RateLimitService service = new RateLimitService(1, 10, 10);
+
+        service.checkLogin("10.0.0.1");            // exhausts the IP bucket
+        service.checkLoginAccount("alice@example.com"); // separate bucket — must not throw
+
+        assert429(() -> service.checkLogin("10.0.0.1"), ErrorCode.RATE_LIMITED, 60);
+        // Bob's account is unaffected by Alice's or the IP's exhaustion
+        service.checkLoginAccount("bob@example.com");
+    }
+
+    @Test
+    void blankAccountIsIgnoredRatherThanFailing() {
+        RateLimitService service = new RateLimitService(1, 10, 10);
+        service.checkLoginAccount(null);
+        service.checkLoginAccount("   ");
+    }
 }

@@ -61,6 +61,9 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
                                               HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         rateLimitService.checkLogin(java.util.Objects.toString(httpRequest.getRemoteAddr(), "unknown"));
+        // Per-account cap as well: limits credential stuffing of one account
+        // from many IPs (same window/limit as the IP check).
+        rateLimitService.checkLoginAccount(request.getEmail());
         authenticateAndSave(request.getEmail(), request.getPassword(), httpRequest, httpResponse);
 
         User user = userRepository.findByEmailIgnoreCase(request.getEmail())
