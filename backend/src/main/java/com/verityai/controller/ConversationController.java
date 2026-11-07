@@ -3,6 +3,7 @@ package com.verityai.controller;
 import com.verityai.dto.request.AskQuestionRequest;
 import com.verityai.dto.request.CreateConversationRequest;
 import com.verityai.dto.request.UpdateConversationRequest;
+import com.verityai.dto.response.ClaimVerificationResponse;
 import com.verityai.dto.response.ConversationListResponse;
 import com.verityai.dto.response.ConversationResponse;
 import com.verityai.dto.response.MessageListResponse;
@@ -49,6 +50,7 @@ public class ConversationController {
     private final MessageCitationRepository citationRepository;
     private final ChatService chatService;
     private final RateLimitService rateLimitService;
+    private final com.verityai.service.verification.ClaimVerificationService claimVerificationService;
 
     @PostMapping
     public ResponseEntity<ConversationResponse> create(@CurrentUser User user, @Valid @RequestBody CreateConversationRequest request) {
@@ -194,6 +196,29 @@ public class ConversationController {
 
         MessageResponse response = chatService.ask(conversation, request.getQuestion(), request.getDocumentIds());
         return ResponseEntity.ok(response);
+    }
+
+    /** Stored claim verification for one assistant message (no model call). */
+    @GetMapping("/{id}/messages/{messageId}/verify")
+    public ResponseEntity<ClaimVerificationResponse> getVerification(
+            @CurrentUser User user,
+            @PathVariable UUID id,
+            @PathVariable UUID messageId) {
+        conversationRepository.findByIdAndUserIdAndArchivedAtIsNull(id, user.getId())
+            .orElseThrow(() -> ApiException.notFound("Conversation not found"));
+        return ResponseEntity.ok(claimVerificationService.getVerification(id, messageId));
+    }
+
+    /** Runs claim verification (bounded model call, rate-limited) and stores the result. */
+    @PostMapping("/{id}/messages/{messageId}/verify")
+    public ResponseEntity<ClaimVerificationResponse> verify(
+            @CurrentUser User user,
+            @PathVariable UUID id,
+            @PathVariable UUID messageId) {
+        rateLimitService.checkAiRequest(user.getId());
+        conversationRepository.findByIdAndUserIdAndArchivedAtIsNull(id, user.getId())
+            .orElseThrow(() -> ApiException.notFound("Conversation not found"));
+        return ResponseEntity.ok(claimVerificationService.verify(id, messageId));
     }
 
     private ConversationResponse toResponse(Conversation conversation) {
