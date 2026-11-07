@@ -210,6 +210,43 @@ export interface AskQuestionRequest {
   documentIds?: string[];
 }
 
+export type VerificationStatus = 'NOT_REQUESTED' | 'COMPLETED' | 'PARTIAL' | 'FAILED';
+
+/** AI grounding assessment of a claim against its cited evidence (not a probability). */
+export type SupportClass = 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'UNSUPPORTED' | 'CONFLICTING';
+
+export interface ClaimResult {
+  claimIndex: number;
+  sentenceIndex: number;
+  claimText: string;
+  supportClass: SupportClass | null;
+  explanation: string | null;
+  /** 0-based citation indexes this claim relies on. */
+  citationIndexes: number[];
+  hasInvalidCitation: boolean;
+}
+
+export interface InvalidReference {
+  claimIndex: number;
+  claimText: string;
+  /** Out-of-range S number as written in the text (1-based). */
+  reference: number;
+}
+
+export interface ClaimVerificationResponse {
+  messageId: string;
+  status: VerificationStatus;
+  /** Deterministic fraction of analyzed claims citing ≥1 valid source. */
+  coverage: number | null;
+  model: string | null;
+  verifiedAt: string | null;
+  /** Claims found in the message text (may exceed claims.length when capped). */
+  totalClaims: number;
+  error: string | null;
+  claims: ClaimResult[];
+  invalidReferences: InvalidReference[];
+}
+
 export interface ApiError {
   timestamp: string;
   status: number;
