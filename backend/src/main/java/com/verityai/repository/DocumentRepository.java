@@ -58,4 +58,37 @@ public interface DocumentRepository extends JpaRepository<Document, UUID>, JpaSp
     int updateProcessingResult(@Param("id") UUID id,
                                @Param("status") Document.DocumentStatus status,
                                @Param("pageCount") Integer pageCount);
+
+    // ------------------------------------------------------------------
+    // Phase 3: knowledge graph lifecycle
+    // ------------------------------------------------------------------
+
+    @Query("""
+        SELECT d.id FROM Document d
+        WHERE d.status = :status
+        AND d.deletedAt IS NULL
+        AND d.knowledgeStatus IN :statuses
+        AND EXISTS (SELECT 1 FROM DocumentChunk c WHERE c.document.id = d.id)
+        """)
+    List<UUID> findDocumentsPendingKnowledge(
+        @Param("status") Document.DocumentStatus status,
+        @Param("statuses") java.util.Collection<Document.KnowledgeStatus> statuses);
+
+    @Query("""
+        SELECT d.id FROM Document d
+        WHERE d.user.id = :userId
+        AND d.status = :status
+        AND d.deletedAt IS NULL
+        AND EXISTS (SELECT 1 FROM DocumentChunk c WHERE c.document.id = d.id)
+        ORDER BY d.updatedAt DESC
+        """)
+    List<UUID> findReadyDocumentIdsForUser(@Param("userId") UUID userId,
+                                           @Param("status") Document.DocumentStatus status,
+                                           Pageable pageable);
+
+    @Query("SELECT MAX(d.knowledgeGeneratedAt) FROM Document d " +
+           "WHERE d.user.id = :userId AND d.deletedAt IS NULL")
+    java.time.Instant findLatestKnowledgeGeneratedAtForUser(@Param("userId") UUID userId);
+
+    long countByUserIdAndKnowledgeStatusAndDeletedAtIsNull(UUID userId, Document.KnowledgeStatus status);
 }

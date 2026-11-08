@@ -57,6 +57,7 @@ public class SummaryService {
     private final DocumentChunkRepository chunkRepository;
     private final DocumentSummaryRepository summaryRepository;
     private final LlmService llmService;
+    private final com.verityai.service.knowledge.KnowledgeGraphService knowledgeGraphService;
     private final ObjectMapper objectMapper;
 
     /** Single worker: summaries are generated serially, one document at a time. */
@@ -223,6 +224,9 @@ public class SummaryService {
             JsonNode sections = requestSections(basis);
             persist(documentId, sections, basis.length() <= text.length() ? text : basis);
             markReady(documentId);
+            // The summary model classifies entities (PERSON/ORGANIZATION/…).
+            // Rebuild the graph so those richer types replace pattern-only ones.
+            knowledgeGraphService.rebuild(documentId);
             log.info("Generated summaries for document {} ({} chars of source text)",
                 documentId, text.length());
         } catch (Exception e) {

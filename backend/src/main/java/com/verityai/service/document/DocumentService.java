@@ -42,6 +42,7 @@ public class DocumentService {
     private final ProcessingEventService processingEventService;
     private final com.verityai.service.summary.SummaryService summaryService;
     private final com.verityai.service.embedding.EmbeddingIndexService embeddingIndexService;
+    private final com.verityai.service.knowledge.KnowledgeGraphService knowledgeGraphService;
     private final com.verityai.config.ProcessingConfig.ProcessingExecutor processingExecutor;
 
     @Value("${verityai.upload.dir:/var/lib/verityai/uploads}")
@@ -265,6 +266,13 @@ public class DocumentService {
             // delete cannot be undone by this stale entity.
             documentRepository.updateProcessingResult(
                 documentId, Document.DocumentStatus.READY, pageCount);
+
+            // Phase 3: deterministic knowledge-graph extraction. Runs after the
+            // document is READY (the builder only reads READY documents) and is
+            // best-effort: a graph failure is recorded on the document and never
+            // blocks indexing or retrieval.
+            knowledgeGraphService.rebuild(documentId);
+
             processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.COMPLETED);
 
             log.info("Processed document {}: {} pages, {} chunks", documentId, pageCount, chunks.size());
@@ -351,8 +359,9 @@ public class DocumentService {
         }
 
         chunkRepository.deleteByDocumentId(documentId);
-        // Reprocessing invalidates any summaries derived from the old chunks
+        // Reprocessing invalidates any summaries and graph derived from the old chunks
         summaryService.regenerateReset(documentId);
+        knowledgeGraphService.deleteForDocument(documentId);
 
         document.setStatus(Document.DocumentStatus.UPLOADED);
         document.setErrorCode(null);
@@ -389,6 +398,9 @@ public class DocumentService {
 
         document.setDeletedAt(Instant.now());
         documentRepository.save(document);
+
+        // Graph rows are derived content; remove them with the document.
+        knowledgeGraphService.deleteForDocument(documentId);
 
         try {
             Path filePath = uploadPath.resolve(document.getStoredFilename());

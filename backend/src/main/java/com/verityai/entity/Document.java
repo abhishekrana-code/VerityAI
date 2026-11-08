@@ -77,11 +77,26 @@ public class Document {
     @Column(name = "summary_error", length = 300)
     private String summaryError;
 
+    /** Knowledge-graph lifecycle: NONE | PENDING | READY | FAILED. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "knowledge_status", nullable = false, length = 20)
+    private KnowledgeStatus knowledgeStatus = KnowledgeStatus.NONE;
+
+    @Column(name = "knowledge_error", length = 300)
+    private String knowledgeError;
+
+    @Column(name = "knowledge_generated_at")
+    private Instant knowledgeGeneratedAt;
+
     public enum DocumentStatus {
         UPLOADED, PROCESSING, READY, FAILED
     }
 
     public enum SummaryStatus {
+        NONE, PENDING, READY, FAILED
+    }
+
+    public enum KnowledgeStatus {
         NONE, PENDING, READY, FAILED
     }
 }
