@@ -5,20 +5,30 @@ import { Logo } from './Logo';
 import {
   LayoutDashboard, FolderOpen, MessageSquare, Settings, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Plus, Search,
+  Network, ShieldCheck, FileBarChart, History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const navigation = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, end: true },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, end: true },
   { name: 'Documents', href: '/dashboard/documents', icon: FolderOpen },
   { name: 'Research workspace', href: '/dashboard/workspace', icon: MessageSquare },
+  { name: 'Knowledge graph', href: '/dashboard/knowledge-graph', icon: Network },
+  { name: 'Verification', href: '/dashboard/verification', icon: ShieldCheck },
+  { name: 'Reports', href: '/dashboard/reports', icon: FileBarChart },
+  { name: 'History', href: '/dashboard/history', icon: History },
 ];
 
 const pageNames: Record<string, string> = {
-  '/dashboard': 'Overview',
+  '/dashboard': 'Dashboard',
+  '/dashboard/search': 'Search',
   '/dashboard/documents': 'Documents',
   '/dashboard/workspace': 'Research workspace',
+  '/dashboard/knowledge-graph': 'Knowledge graph',
+  '/dashboard/verification': 'Verification',
+  '/dashboard/reports': 'Reports',
+  '/dashboard/history': 'History',
   '/dashboard/settings': 'Settings',
 };
 
@@ -29,6 +39,18 @@ export function Layout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // ⌘K / Ctrl+K opens the dedicated search page.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        navigate('/dashboard/search');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate]);
 
   const handleLogout = async () => {
     await logout.mutateAsync();
@@ -139,11 +161,15 @@ export function Layout() {
             <p className="hidden text-[11px] text-muted-foreground sm:block">Your evidence-first research environment</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-xl border border-border/80 bg-card/70 px-3 py-2 text-xs text-muted-foreground xl:flex">
+            <button
+              onClick={() => navigate('/dashboard/search')}
+              className="hidden items-center gap-2 rounded-xl border border-border/80 bg-card/70 px-3 py-2 text-xs text-muted-foreground transition hover:bg-accent hover:text-foreground xl:flex"
+              aria-label="Search your documents"
+            >
               <Search className="h-3.5 w-3.5" />
               <span>Find anything</span>
               <kbd className="ml-4 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">⌘ K</kbd>
-            </div>
+            </button>
             <ThemeToggle />
             <span className="hidden h-8 w-px bg-border sm:block" />
             <div className="hidden h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-xs font-bold text-indigo-300 sm:flex">{initials}</div>

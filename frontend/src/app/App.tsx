@@ -8,6 +8,11 @@ import { DocumentsPage } from '@/features/documents/DocumentsPage';
 import { DocumentDetailPage } from '@/features/documents/DocumentDetailPage';
 import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 import { ConversationPage } from '@/features/workspace/ConversationPage';
+import { SearchPage } from '@/features/search/SearchPage';
+import { KnowledgeGraphPage } from '@/features/knowledge-graph/KnowledgeGraphPage';
+import { VerificationPage } from '@/features/verification/VerificationPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
+import { HistoryPage } from '@/features/history/HistoryPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { LandingPage } from '@/features/landing/LandingPage';
 
@@ -76,10 +81,15 @@ export function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="search" element={<SearchPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="workspace/:conversationId" element={<ConversationPage />} />
+        <Route path="knowledge-graph" element={<KnowledgeGraphPage />} />
+        <Route path="verification" element={<VerificationPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="history" element={<HistoryPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

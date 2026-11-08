@@ -291,3 +291,191 @@ export interface ChangePasswordRequest {
 export interface UpdateProfileRequest {
   displayName?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2: hybrid search (Feature 4) — now surfaced in the UI
+// ---------------------------------------------------------------------------
+
+export interface SearchRequest {
+  query: string;
+  documentIds?: string[];
+  limit?: number;
+}
+
+export type SearchStrategy = 'keyword' | 'semantic' | 'hybrid';
+
+export interface SearchHit {
+  chunkId: string;
+  documentId: string;
+  documentName: string;
+  pageNumber: number | null;
+  chunkIndex: number | null;
+  content: string;
+  excerpt: string;
+  rank: number;
+  similarity: number | null;
+  keywordMatch: boolean;
+  semanticMatch: boolean;
+}
+
+export interface SearchResponse {
+  query: string;
+  strategy: SearchStrategy;
+  model: string | null;
+  count: number;
+  results: SearchHit[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: knowledge graph (Feature 7)
+// ---------------------------------------------------------------------------
+
+export type KnowledgeEntityType =
+  | 'PERSON' | 'ORGANIZATION' | 'LOCATION' | 'PRODUCT' | 'EVENT'
+  | 'DATE' | 'METRIC' | 'ACRONYM' | 'CONCEPT' | 'OTHER';
+
+export interface KnowledgeGraphNode {
+  id: string;
+  name: string;
+  type: KnowledgeEntityType;
+  mentionCount: number;
+  documentId: string;
+  documentName: string;
+  firstPage: number | null;
+  evidenceExcerpt: string | null;
+}
+
+export interface KnowledgeGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relationType: 'CO_OCCURS';
+  weight: number;
+  documentId: string;
+  firstPage: number | null;
+  evidenceExcerpt: string | null;
+}
+
+export interface KnowledgeGraphResponse {
+  documentId: string | null;
+  documentName: string | null;
+  scope: 'DOCUMENT' | 'LIBRARY';
+  status: 'NONE' | 'PENDING' | 'READY' | 'FAILED';
+  error: string | null;
+  generatedAt: string | null;
+  entityCount: number;
+  relationCount: number;
+  documentCount: number;
+  returnedEntities: number;
+  truncated: boolean;
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+}
+
+export interface KnowledgeGraphRebuildResponse {
+  requested: number;
+  rebuilt: number;
+  skipped: number;
+  rebuiltDocumentIds: string[];
+  errors: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: verification / reports / history read models
+// ---------------------------------------------------------------------------
+
+export type VerificationListStatus = 'NOT_REQUESTED' | 'PARTIAL' | 'COMPLETED';
+
+export interface VerificationListItem {
+  messageId: string;
+  conversationId: string;
+  conversationTitle: string | null;
+  contentExcerpt: string;
+  createdAt: string;
+  messageModel: string | null;
+  evidenceStatus: 'SUFFICIENT' | 'INSUFFICIENT' | 'NONE' | null;
+  citationCount: number;
+  status: VerificationListStatus;
+  coverage: number | null;
+  verificationModel: string | null;
+  verifiedAt: string | null;
+  totalClaims: number;
+  analyzedClaims: number;
+  classifiedClaims: number;
+  invalidReferenceCount: number;
+  supportCounts: Record<SupportClass, number>;
+}
+
+export interface VerificationListResponse {
+  content: VerificationListItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface VerificationStatsResponse {
+  total: number;
+  verified: number;
+  partial: number;
+  completed: number;
+  unverified: number;
+}
+
+export type ReportSummaryStatus = 'NONE' | 'PENDING' | 'READY' | 'FAILED';
+
+export interface ReportFinding {
+  text: string;
+  type: 'FACT' | 'INTERPRETATION';
+}
+
+export interface ReportItem {
+  documentId: string;
+  documentName: string;
+  pageCount: number | null;
+  updatedAt: string;
+  summaryStatus: ReportSummaryStatus;
+  summaryError: string | null;
+  sectionCount: number;
+  model: string | null;
+  generatedAt: string | null;
+  executiveSummary: string;
+  keyFindings: ReportFinding[];
+  entityCount: number;
+  dateStatCount: number;
+  topicCount: number;
+  questionCount: number;
+}
+
+export interface ReportListResponse {
+  content: ReportItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface HistoryItem {
+  id: string;
+  documentId: string;
+  documentName: string;
+  attempt: number;
+  stage: ProcessingStage;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface HistoryListResponse {
+  content: HistoryItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
