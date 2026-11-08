@@ -46,7 +46,7 @@ Fetch a token first from `GET /auth/csrf`.
 | POST | `/documents/{id}/tags/{tagId}` / DELETE | Attach / detach a tag |
 | POST | `/documents/{id}/retry` | Re-run failed processing |
 | DELETE | `/documents/{id}` | Delete document + stored file |
-| POST | `/documents/bulk-delete` | `{ ids: [...] }` → deletes owned docs only, reports `deletedIds`/`skippedIds` |
+| POST | `/documents/bulk-delete` | `{ documentIds: [...] }` → deletes owned docs only, returns `{ deleted, skippedIds }` |
 
 Processing is asynchronous; poll `/documents/{id}/status` or the SSE-free
 `/processing` history. Chunks are embedded with the local ONNX model while the
