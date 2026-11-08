@@ -192,6 +192,141 @@ Semantics:
 
 ---
 
+## Knowledge graph — `/knowledge-graph` (Phase 3)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/knowledge-graph` | Graph for the user's library, or one document via `documentId`. Filters: `type`, `q`, `limit` (1–300, default 120) |
+| POST | `/knowledge-graph/rebuild` | `{ documentIds?: [...] }` — rebuilds those documents, or up to 10 of the user's READY documents when omitted. CSRF required |
+
+```jsonc
+{
+  "documentId": "…",              // null for a library-wide graph
+  "documentName": "report.pdf",   // null for a library-wide graph
+  "scope": "DOCUMENT",            // DOCUMENT | LIBRARY
+  "status": "READY",              // NONE | PENDING | READY | FAILED (document scope)
+  "error": null,
+  "generatedAt": "…",
+  "entityCount": 42,
+  "relationCount": 118,
+  "documentCount": 1,
+  "returnedEntities": 42,
+  "truncated": false,
+  "nodes": [{
+    "id": "…", "name": "Alpha Corp", "type": "ORGANIZATION",
+    "mentionCount": 7, "documentId": "…", "documentName": "report.pdf",
+    "firstPage": 3, "evidenceExcerpt": "…"
+  }],
+  "edges": [{
+    "id": "…", "source": "…", "target": "…",
+    "relationType": "CO_OCCURS", "weight": 4,
+    "documentId": "…", "firstPage": 3, "evidenceExcerpt": "…"
+  }]
+}
+```
+
+Semantics:
+
+- **PostgreSQL only.** No external graph database; entities and relations live
+  in `knowledge_entities` / `knowledge_relations` (V6).
+- **Deterministic extraction.** Dates, metrics, acronyms, proper nouns and
+  CamelCase names are extracted with regexes; the summary model's `ENTITIES`
+  section is merged in when present to improve entity *types*. No model call is
+  made to build a graph.
+- **`CO_OCCURS` is not a fact.** An edge means both entities were mentioned in
+  the same chunk; `weight` is the number of such passages. The API and UI say so
+  explicitly, and every node/edge carries an evidence excerpt and first page.
+- Extraction is bounded (150 entities / 1500 relations per document, 300 nodes /
+  4000 edges per response) and runs synchronously after document processing,
+  after summaries complete, and via a bounded asynchronous startup backfill.
+- All reads are ownership-scoped; a foreign `documentId` returns **404**.
+
+---
+
+## Verification index — `/verifications` (Phase 3)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/verifications` | Paginated assistant answers (`page`, `size`, `status`) with stored verification results |
+| GET | `/verifications/stats` | Totals for the current user |
+
+`status` filter: `ALL` (default) | `VERIFIED` | `UNVERIFIED` | `PARTIAL` | `COMPLETED`.
+This endpoint only **reads** stored results; running verification still uses
+`POST /conversations/{id}/messages/{messageId}/verify`, preserving its
+ownership checks and rate limit.
+
+```jsonc
+{
+  "content": [{
+    "messageId": "…", "conversationId": "…", "conversationTitle": "Q3 review",
+    "contentExcerpt": "…", "createdAt": "…",
+    "messageModel": "gpt-oss-20b", "evidenceStatus": "SUFFICIENT", "citationCount": 3,
+    "status": "COMPLETED",        // NOT_REQUESTED | PARTIAL | COMPLETED
+    "coverage": 0.75,             // deterministic; null when nothing was analyzed
+    "verificationModel": "gpt-oss-20b", "verifiedAt": "…",
+    "totalClaims": 8, "analyzedClaims": 6, "classifiedClaims": 6,
+    "invalidReferenceCount": 0,
+    "supportCounts": { "SUPPORTED": 4, "PARTIALLY_SUPPORTED": 1, "UNSUPPORTED": 1, "CONFLICTING": 0 }
+  }],
+  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "first": true, "last": true
+}
+```
+
+`GET /verifications/stats` → `{ total, verified, partial, completed, unverified }`.
+
+---
+
+## Reports — `/reports` (Phase 3)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/reports` | Paginated report index over READY documents (`page`, `size`, `q`, `summaryStatus`) |
+
+`summaryStatus`: `ALL` (default) | `NONE` | `PENDING` | `READY` | `FAILED`.
+A report is the persisted summary set; listing never calls a model.
+
+```jsonc
+{
+  "content": [{
+    "documentId": "…", "documentName": "annual-report.pdf", "pageCount": 42,
+    "updatedAt": "…", "summaryStatus": "READY", "summaryError": null,
+    "sectionCount": 6, "model": "gpt-oss-20b", "generatedAt": "…",
+    "executiveSummary": "…",
+    "keyFindings": [{ "text": "…", "type": "FACT" }, { "text": "…", "type": "INTERPRETATION" }],
+    "entityCount": 18, "dateStatCount": 9, "topicCount": 6, "questionCount": 5
+  }],
+  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "first": true, "last": true
+}
+```
+
+Regeneration remains on `POST /documents/{id}/summaries/regenerate`
+(ownership-checked, rate-limited, atomic replace).
+
+---
+
+## History — `/history` (Phase 3)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/history/processing` | Paginated processing-event feed across the user's documents (`page`, `size`), newest first |
+
+Every row is a persisted `document_processing_events` stage transition — nothing
+is synthesized. Research-session history is served by the existing
+`GET /conversations`, which already returns newest-updated first.
+
+```jsonc
+{
+  "content": [{
+    "id": "…", "documentId": "…", "documentName": "report.pdf",
+    "attempt": 2, "stage": "COMPLETED",
+    "errorCode": null, "errorMessage": null, "createdAt": "…"
+  }],
+  "page": 0, "size": 25, "totalElements": 12, "totalPages": 1, "first": true, "last": true
+}
+```
+
+---
+
 ## Tags — `/tags`
 
 | Method | Path | Notes |

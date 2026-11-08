@@ -31,7 +31,7 @@ Run a single class:
 | Frontend | Vitest + jsdom | API client, error mapping |
 
 Every Testcontainers class boots a **fresh** PostgreSQL container with Flyway
-migrations V1–V5 applied, so schema regressions surface immediately.
+migrations V1–V6 applied, so schema regressions surface immediately.
 
 ## External dependencies in tests
 
@@ -65,8 +65,9 @@ migrations V1–V5 applied, so schema regressions surface immediately.
 | `SemanticSearchIntegrationTest` | 9 | **Hybrid search:** paraphrase → `semantic`, overlap → `hybrid`, unindexed → `keyword`, 403/401/400, cross-user isolation, server-side limit cap |
 | `KeywordOnlySearchTest` | 3 | **Graceful degradation:** `provider=off` → keyword-only, `model: null`, honest empty results |
 | `ConversationRagIntegrationTest` | 11 | **Multi-doc chat citation integrity** (evidence scoping, foreign docs 403) + **claim verification endpoints** (NOT_REQUESTED / deterministic / model round-trip / invalid `[S7]` / FAILED stores nothing / re-verify replaces / 404 authz / USER message 400) |
+| `IntelligencePagesIntegrationTest` | 8 | **Phase 3 read models:** deterministic graph build (entities, summary-type merge, CO_OCCURS edges, type filter, ownership 404), verification list/stats/filters, report index (facts vs interpretations), processing-history ordering/errors, 401 on all read models |
 
-**Total: 106 backend tests.**
+**Total: 114 backend tests.**
 
 ### Notable behaviors the tests pin down
 
@@ -89,10 +90,13 @@ migrations V1–V5 applied, so schema regressions surface immediately.
 |---|---:|---|
 | `src/lib/api.test.ts` | 7 | API client: base URL, CSRF header injection, error envelope parsing |
 | `src/lib/errors.test.ts` | 5 | Error → user-facing message mapping |
+| `src/features/knowledge-graph/graphLayout.test.ts` | 5 | Deterministic SVG layout: bounds, stable positions, mention-scaled radii, missing-edge tolerance |
 
-**Total: 12 frontend tests.** Component-level UI flows (context picker,
-verification panel, PDF jumps) are verified in the browser E2E pass described
-in the verification report rather than in jsdom.
+**Total: 17 frontend tests.** Component-level UI flows (context picker,
+verification panel, PDF jumps, graph inspector) are not covered in jsdom. They
+are validated by typecheck/lint/production build plus the API-level live checks
+in `docs/phase-3-verification-report.md`; there is no automated browser E2E
+suite in this repository.
 
 ## CI
 

@@ -87,6 +87,9 @@ verity-ai/
 - **Hybrid semantic search** (Phase 2) — Local ONNX embeddings + PostgreSQL pgvector fused with full-text search (RRF); degrades honestly to keyword-only when the model is unavailable
 - **Multi-document research chat** (Phase 2) — Ask across several PDFs at once; sources are compared explicitly and cited per claim; context documents can be added/removed at any time
 - **Claim verification** (Phase 2) — Deterministic citation coverage + AI grounding classes (Supported / Partially supported / Unsupported / Conflicting) with clickable page-level citation jumps into the PDF
+- **Knowledge graph** (Phase 3) — PostgreSQL-only, deterministic entity extraction with evidence excerpts and same-passage (`CO_OCCURS`) links rendered as an interactive SVG graph
+- **Verification, Reports & History pages** (Phase 3) — Library-wide read models over stored claim results, generated summaries (facts vs interpretations) and persisted processing events
+- **Dedicated search page** — Hybrid retrieval UI with document scope, honest strategy/model badges and PDF page jumps
 - **Secure by default** — Session auth, HttpOnly cookies, CSRF, ownership enforcement
 - **Rate limited** — Per-IP *and* per-account login limits, per-user upload/AI quotas return 429 with `Retry-After`
 - **Observable** — Structured logs, request IDs, health endpoints, Actuator metrics
@@ -118,6 +121,11 @@ Everything else has working defaults. Phase 2 additions (all optional):
 - `RETRIEVAL_HYBRID`, `RETRIEVAL_MIN_SIMILARITY` — semantic branch tuning
 - `VERIFY_ENABLED`, `VERIFY_MODEL`, `VERIFY_MAX_CLAIMS`, `VERIFY_MAX_TOKENS` — claim verification
 
+Phase 3 additions (all optional):
+- `KNOWLEDGE_GRAPH_ENABLED`, `KNOWLEDGE_GRAPH_BACKFILL_LIMIT`,
+  `KNOWLEDGE_GRAPH_REBUILD_MAX_DOCUMENTS`, `KNOWLEDGE_GRAPH_MAX_NODES`,
+  `KNOWLEDGE_GRAPH_MAX_EDGES` — deterministic PostgreSQL knowledge graph
+
 Note: the backend's JDBC credentials
 are set in `backend/src/main/resources/application.yml` — keep
 `POSTGRES_PASSWORD` at its default (`verityai_dev`), or change both together.
@@ -126,15 +134,18 @@ are set in `backend/src/main/resources/application.yml` — keep
 
 ## Testing & CI
 
-- **Backend**: 106 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
+- **Backend**: 114 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
   Run `cd backend && .\mvnw.cmd test` (Docker must be running). See [docs/testing.md](docs/testing.md).
-- **Frontend**: 12 tests — Vitest + jsdom. Run `cd frontend && npm test`.
+- **Frontend**: 17 tests — Vitest + jsdom. Run `cd frontend && npm test`.
 - **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend) and lint/typecheck/test/build
   (frontend) on every push. Testcontainers requires a Docker-capable runner.
 
 The Groq LLM is never called from tests (mocked); the ONNX embedding model is
 downloaded once, SHA-256 verified, and cached locally — semantic tests skip
 honestly when it is unavailable.
+
+Verification reports: [Phase 2](docs/phase-2-verification-report.md) ·
+[Phase 3](docs/phase-3-verification-report.md).
 
 ---
 
@@ -158,6 +169,11 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 | GET/POST | `/conversations/{id}/messages` | Read history / ask a question (RAG + citations) |
 | GET/POST | `/conversations/{id}/messages/{messageId}/verify` | Read stored claim verification / run it (bounded model call) |
 | POST | `/search` | Hybrid semantic + keyword search over your documents |
+| GET | `/knowledge-graph` | Evidence-backed entity graph (library or one document), filters `type`, `q`, `limit` |
+| POST | `/knowledge-graph/rebuild` | Rebuild one, several, or (bounded) all READY graphs |
+| GET | `/verifications`, `/verifications/stats` | Stored claim-verification index and totals |
+| GET | `/reports` | Report index over persisted summary sections |
+| GET | `/history/processing` | Persisted processing-event feed across your documents |
 | GET/POST/PATCH/DELETE | `/tags`, `/tags/{id}` | Tag management |
 | GET/POST/PATCH/DELETE | `/collections`… | Collection management (see [docs/api.md](docs/api.md)) |
 | GET | `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness` | Probes (unauthenticated) |
