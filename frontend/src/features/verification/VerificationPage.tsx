@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/PageStates';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
+import { ContradictionsPanel } from '@/features/verification/ContradictionsPanel';
 import { formatDistanceToNow } from 'date-fns';
 import {
   AlertTriangle,
@@ -60,12 +61,14 @@ const STATUS_STYLES: Record<string, { label: string; className: string }> = {
 export function VerificationPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [view, setView] = useState<'verification' | 'contradictions'>('verification');
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState('');
 
   const statsQuery = useQuery({
     queryKey: ['verifications', 'stats'],
     queryFn: () => api.get<VerificationStatsResponse>('/verifications/stats'),
+    enabled: view === 'verification',
   });
 
   const listQuery = useQuery({
@@ -75,6 +78,7 @@ export function VerificationPage() {
       if (filter) params.set('status', filter);
       return api.get<VerificationListResponse>(`/verifications?${params.toString()}`);
     },
+    enabled: view === 'verification',
     placeholderData: (previous) => previous,
   });
 
@@ -126,6 +130,45 @@ export function VerificationPage() {
         </p>
       </section>
 
+      <div
+        className="flex flex-wrap items-center gap-1 border-b border-border/70"
+        role="tablist"
+        aria-label="Verification views"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'verification'}
+          onClick={() => setView('verification')}
+          className={cn(
+            'inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold transition',
+            view === 'verification'
+              ? 'border-indigo-400 text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+          Answer verification
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'contradictions'}
+          onClick={() => setView('contradictions')}
+          className={cn(
+            'inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold transition',
+            view === 'contradictions'
+              ? 'border-fuchsia-400 text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          Contradictions
+        </button>
+      </div>
+
+      {view === 'verification' && (
+        <>
       {statsQuery.isLoading && <PageLoading label="Loading verification totals…" />}
 
       {statsQuery.isError && !statsQuery.isLoading && (
@@ -225,6 +268,10 @@ export function VerificationPage() {
         classes come from one bounded model call and describe grounding in the cited excerpts only.
         A failed verification stores nothing and leaves the answer unverified.
       </p>
+        </>
+      )}
+
+      {view === 'contradictions' && <ContradictionsPanel />}
 
       <ToastProvider>
         <ToastViewport />

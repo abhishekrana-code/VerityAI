@@ -479,3 +479,70 @@ export interface HistoryListResponse {
   first: boolean;
   last: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3: contradiction detection (Feature 8)
+// ---------------------------------------------------------------------------
+
+export type ContradictionType =
+  | 'NUMERIC_CONFLICT'
+  | 'TEMPORAL_CONFLICT'
+  | 'ATTRIBUTE_CONFLICT'
+  | 'CAUSAL_CONFLICT'
+  | 'POLARITY_CONFLICT';
+
+/** Materiality of the conflict, never a detection probability. */
+export type ContradictionSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface ContradictionItem {
+  id: string;
+  contradictionType: ContradictionType;
+  severity: ContradictionSeverity;
+  subjectEntity: string | null;
+  explanation: string | null;
+  model: string | null;
+  detectedAt: string;
+
+  claimA: string;
+  documentAId: string;
+  documentAName: string;
+  pageA: number | null;
+  chunkAId: string | null;
+
+  claimB: string;
+  documentBId: string;
+  documentBName: string;
+  pageB: number | null;
+  chunkBId: string | null;
+}
+
+export interface ContradictionListResponse {
+  content: ContradictionItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
+export interface ContradictionStatsResponse {
+  total: number;
+  byType: Record<ContradictionType, number>;
+  bySeverity: Record<ContradictionSeverity, number>;
+  lastDetectedAt: string | null;
+}
+
+export interface ContradictionDetectionResponse {
+  status: 'COMPLETED' | 'FAILED' | 'SKIPPED';
+  scope: 'DOCUMENT' | 'LIBRARY';
+  analyzedDocumentIds: string[];
+  analyzedDocuments: number;
+  analyzedClaims: number;
+  candidatePairs: number;
+  found: number;
+  stored: number;
+  model: string | null;
+  detectedAt: string | null;
+  error: string | null;
+}
