@@ -34,4 +34,19 @@ public interface DocumentProcessingEventRepository extends JpaRepository<Documen
         )
         """)
     List<DocumentProcessingEvent> findLatestByDocumentIds(@Param("documentIds") List<UUID> documentIds);
+
+    /** Processing history across the user's documents, newest first. */
+    @Query(value = """
+        SELECT e FROM DocumentProcessingEvent e
+        JOIN FETCH e.document d
+        WHERE d.user.id = :userId AND d.deletedAt IS NULL
+        ORDER BY e.createdAt DESC
+        """,
+        countQuery = """
+        SELECT COUNT(e) FROM DocumentProcessingEvent e
+        JOIN e.document d
+        WHERE d.user.id = :userId AND d.deletedAt IS NULL
+        """)
+    org.springframework.data.domain.Page<DocumentProcessingEvent> findForUser(
+        @Param("userId") UUID userId, org.springframework.data.domain.Pageable pageable);
 }

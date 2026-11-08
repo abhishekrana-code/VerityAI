@@ -21,5 +21,10 @@ public interface MessageCitationRepository extends JpaRepository<MessageCitation
     @Query("SELECT mc FROM MessageCitation mc WHERE mc.message.id = :messageId ORDER BY mc.citationIndex")
     List<MessageCitation> findByMessageId(UUID messageId);
 
+    /** Citation counts for a page of messages in one query (no N+1). */
+    @Query("SELECT mc.message.id, COUNT(mc) FROM MessageCitation mc " +
+           "WHERE mc.message.id IN :ids GROUP BY mc.message.id")
+    List<Object[]> countByMessageIds(@Param("ids") Collection<UUID> ids);
+
     void deleteByMessageId(UUID messageId);
 }

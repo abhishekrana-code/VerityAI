@@ -16,6 +16,10 @@ public interface DocumentSummaryRepository extends JpaRepository<DocumentSummary
 
     Optional<DocumentSummary> findByDocumentIdAndKind(UUID documentId, DocumentSummary.Kind kind);
 
+    /** Summary sections for a page of documents in one query (no N+1). */
+    @Query("SELECT s FROM DocumentSummary s JOIN FETCH s.document WHERE s.document.id IN (:ids)")
+    List<DocumentSummary> findByDocumentIdIn(@Param("ids") java.util.Collection<UUID> ids);
+
     @Modifying
     @Transactional
     @Query("DELETE FROM DocumentSummary s WHERE s.document.id = :documentId")

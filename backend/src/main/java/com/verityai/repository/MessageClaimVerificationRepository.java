@@ -18,6 +18,11 @@ public interface MessageClaimVerificationRepository extends JpaRepository<Messag
     @Query("SELECT mcv FROM MessageClaimVerification mcv JOIN FETCH mcv.message WHERE mcv.message.id = :messageId ORDER BY mcv.claimIndex")
     List<MessageClaimVerification> findByMessageIdWithMessage(@Param("messageId") UUID messageId);
 
+    /** Verification rows for a page of messages in one query (no N+1). */
+    @Query("SELECT mcv FROM MessageClaimVerification mcv JOIN FETCH mcv.message " +
+           "WHERE mcv.message.id IN (:ids) ORDER BY mcv.message.id, mcv.claimIndex")
+    List<MessageClaimVerification> findByMessageIdIn(@Param("ids") java.util.Collection<UUID> ids);
+
     @Modifying
     @Query("DELETE FROM MessageClaimVerification mcv WHERE mcv.message.id = :messageId")
     void deleteByMessageId(@Param("messageId") UUID messageId);
