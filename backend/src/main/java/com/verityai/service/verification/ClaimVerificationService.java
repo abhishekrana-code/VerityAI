@@ -216,7 +216,7 @@ public class ClaimVerificationService {
      * list symbols) are dropped. Order is stable, so claim index == sentence
      * index for the analyzed prefix.
      */
-    static List<String> segmentClaims(String content) {
+    public static List<String> segmentClaims(String content) {
         List<String> claims = new ArrayList<>();
         if (content == null || content.isBlank()) {
             return claims;
@@ -363,7 +363,7 @@ public class ClaimVerificationService {
     }
 
     /** Strips code fences / prose and returns the first JSON array in the text. */
-    static String extractJsonArray(String content) {
+    public static String extractJsonArray(String content) {
         String s = content == null ? "" : content.trim();
         if (s.startsWith("```")) {
             s = s.replaceFirst("^```[a-zA-Z]*\\s*", "").replaceFirst("```\\s*$", "").trim();

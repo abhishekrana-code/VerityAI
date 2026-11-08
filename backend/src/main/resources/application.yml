@@ -119,6 +119,17 @@ verityai:
     # Bounds on the graph read model returned by the API
     max-nodes: ${KNOWLEDGE_GRAPH_MAX_NODES:300}
     max-edges: ${KNOWLEDGE_GRAPH_MAX_EDGES:4000}
+  contradictions:
+    # Claim-pair contradiction detection (Feature 8). Explicit, rate-limited runs.
+    enabled: ${CONTRADICTION_ENABLED:true}
+    # Optional dedicated model; empty = chat model
+    model: ${CONTRADICTION_MODEL:}
+    # Bounds so one request cannot analyze a whole library or explode model cost
+    max-documents: ${CONTRADICTION_MAX_DOCUMENTS:6}
+    max-chunks-per-document: ${CONTRADICTION_MAX_CHUNKS_PER_DOCUMENT:12}
+    max-claims-per-document: ${CONTRADICTION_MAX_CLAIMS_PER_DOCUMENT:20}
+    max-pairs: ${CONTRADICTION_MAX_PAIRS:30}
+    max-tokens: ${CONTRADICTION_MAX_TOKENS:3000}
   rate-limit:
     ai-requests-per-minute: ${RATE_LIMIT_AI_REQUESTS_PER_MINUTE:20}
     uploads-per-hour: ${RATE_LIMIT_UPLOADS_PER_HOUR:10}

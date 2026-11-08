@@ -43,6 +43,7 @@ public class DocumentService {
     private final com.verityai.service.summary.SummaryService summaryService;
     private final com.verityai.service.embedding.EmbeddingIndexService embeddingIndexService;
     private final com.verityai.service.knowledge.KnowledgeGraphService knowledgeGraphService;
+    private final com.verityai.service.contradiction.ContradictionService contradictionService;
     private final com.verityai.config.ProcessingConfig.ProcessingExecutor processingExecutor;
 
     @Value("${verityai.upload.dir:/var/lib/verityai/uploads}")
@@ -362,6 +363,7 @@ public class DocumentService {
         // Reprocessing invalidates any summaries and graph derived from the old chunks
         summaryService.regenerateReset(documentId);
         knowledgeGraphService.deleteForDocument(documentId);
+        contradictionService.deleteForDocument(documentId);
 
         document.setStatus(Document.DocumentStatus.UPLOADED);
         document.setErrorCode(null);
@@ -401,6 +403,7 @@ public class DocumentService {
 
         // Graph rows are derived content; remove them with the document.
         knowledgeGraphService.deleteForDocument(documentId);
+        contradictionService.deleteForDocument(documentId);
 
         try {
             Path filePath = uploadPath.resolve(document.getStoredFilename());
