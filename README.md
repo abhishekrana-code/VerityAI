@@ -89,6 +89,7 @@ verity-ai/
 - **Claim verification** (Phase 2) — Deterministic citation coverage + AI grounding classes (Supported / Partially supported / Unsupported / Conflicting) with clickable page-level citation jumps into the PDF
 - **Knowledge graph** (Phase 3) — PostgreSQL-only, deterministic entity extraction with evidence excerpts and same-passage (`CO_OCCURS`) links rendered as an interactive SVG graph
 - **Verification, Reports & History pages** (Phase 3) — Library-wide read models over stored claim results, generated summaries (facts vs interpretations) and persisted processing events
+- **Contradiction detection** (Phase 3, Feature 8) — Compares bounded claim pairs that share a subject and reports only genuine conflicts in five classes (numeric, temporal, attribute, causal, polarity), each with both claims, documents and page citations plus a LOW/MEDIUM/HIGH impact rating
 - **Dedicated search page** — Hybrid retrieval UI with document scope, honest strategy/model badges and PDF page jumps
 - **Secure by default** — Session auth, HttpOnly cookies, CSRF, ownership enforcement
 - **Rate limited** — Per-IP *and* per-account login limits, per-user upload/AI quotas return 429 with `Retry-After`
@@ -125,6 +126,9 @@ Phase 3 additions (all optional):
 - `KNOWLEDGE_GRAPH_ENABLED`, `KNOWLEDGE_GRAPH_BACKFILL_LIMIT`,
   `KNOWLEDGE_GRAPH_REBUILD_MAX_DOCUMENTS`, `KNOWLEDGE_GRAPH_MAX_NODES`,
   `KNOWLEDGE_GRAPH_MAX_EDGES` — deterministic PostgreSQL knowledge graph
+- `CONTRADICTION_ENABLED`, `CONTRADICTION_MODEL`, `CONTRADICTION_MAX_DOCUMENTS`,
+  `CONTRADICTION_MAX_CHUNKS_PER_DOCUMENT`, `CONTRADICTION_MAX_CLAIMS_PER_DOCUMENT`,
+  `CONTRADICTION_MAX_PAIRS`, `CONTRADICTION_MAX_TOKENS` — contradiction detection
 
 Note: the backend's JDBC credentials
 are set in `backend/src/main/resources/application.yml` — keep
@@ -134,7 +138,7 @@ are set in `backend/src/main/resources/application.yml` — keep
 
 ## Testing & CI
 
-- **Backend**: 114 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
+- **Backend**: 135 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
   Run `cd backend && .\mvnw.cmd test` (Docker must be running). See [docs/testing.md](docs/testing.md).
 - **Frontend**: 17 tests — Vitest + jsdom. Run `cd frontend && npm test`.
 - **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend) and lint/typecheck/test/build
@@ -172,6 +176,8 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 | GET | `/knowledge-graph` | Evidence-backed entity graph (library or one document), filters `type`, `q`, `limit` |
 | POST | `/knowledge-graph/rebuild` | Rebuild one, several, or (bounded) all READY graphs |
 | GET | `/verifications`, `/verifications/stats` | Stored claim-verification index and totals |
+| GET | `/contradictions`, `/contradictions/stats` | Stored contradiction findings, class/severity totals |
+| POST | `/contradictions/detect` | Run one bounded contradiction scan (bounded model call) |
 | GET | `/reports` | Report index over persisted summary sections |
 | GET | `/history/processing` | Persisted processing-event feed across your documents |
 | GET/POST/PATCH/DELETE | `/tags`, `/tags/{id}` | Tag management |

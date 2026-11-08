@@ -31,7 +31,7 @@ Run a single class:
 | Frontend | Vitest + jsdom | API client, error mapping |
 
 Every Testcontainers class boots a **fresh** PostgreSQL container with Flyway
-migrations V1–V6 applied, so schema regressions surface immediately.
+migrations V1-V7 applied, so schema regressions surface immediately.
 
 ## External dependencies in tests
 
@@ -66,8 +66,10 @@ migrations V1–V6 applied, so schema regressions surface immediately.
 | `KeywordOnlySearchTest` | 3 | **Graceful degradation:** `provider=off` → keyword-only, `model: null`, honest empty results |
 | `ConversationRagIntegrationTest` | 11 | **Multi-doc chat citation integrity** (evidence scoping, foreign docs 403) + **claim verification endpoints** (NOT_REQUESTED / deterministic / model round-trip / invalid `[S7]` / FAILED stores nothing / re-verify replaces / 404 authz / USER message 400) |
 | `IntelligencePagesIntegrationTest` | 8 | **Phase 3 read models:** deterministic graph build (entities, summary-type merge, CO_OCCURS edges, type filter, ownership 404), verification list/stats/filters, report index (facts vs interpretations), processing-history ordering/errors, 401 on all read models |
+| `ContradictionServiceTest` | 16 | **Feature 8 deterministic layer:** proper/topic/number/year extraction, shared-subject pairing, same-chunk/identical/duplicate rejection, pair cap, five-class + severity mapping, strict JSON parsing, canonical pair keys, prompt contract (scope/complementary/time/paraphrase exclusions) |
+| `ContradictionIntegrationTest` | 5 | **Feature 8 endpoints:** detection stores both claims + document/page citations, class/severity filters and stats, failed model/invalid JSON store nothing and keep earlier findings, valid empty result replaces scope, no-candidate runs skip the model, ownership/404, unprocessed 400, CSRF, 401 |
 
-**Total: 114 backend tests.**
+**Total: 135 backend tests.**
 
 ### Notable behaviors the tests pin down
 
@@ -83,6 +85,14 @@ migrations V1–V6 applied, so schema regressions surface immediately.
 - Evidence handed to the model is scoped to the conversation's documents (or
   an explicit `documentIds` subset); a better-matching document outside the
   conversation is never cited.
+- Contradiction detection only stores pairs the classifier explicitly flagged
+  with one of the five approved classes and a valid severity. A model failure or
+  invalid JSON returns `FAILED` and stores nothing; earlier findings stay intact.
+  Scope differences, complementary facts, different time windows and paraphrases
+  are rejected in both the system and user prompts.
+- Every stored contradiction carries both claims, both documents, both page
+  numbers and both chunk IDs — the read model never returns a label without
+  its evidence.
 
 ## Frontend test classes
 

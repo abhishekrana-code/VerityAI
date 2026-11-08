@@ -276,6 +276,93 @@ ownership checks and rate limit.
 
 ---
 
+## Contradictions — `/contradictions` (Phase 3, Feature 8)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/contradictions` | Paginated stored findings (`page`, `size`, `documentId`, `type`). Ownership-scoped; foreign `documentId` → **404** |
+| GET | `/contradictions/stats` | Totals by class and severity for the current user |
+| POST | `/contradictions/detect` | Runs one detection pass. Body `{ documentIds?: [...] }`. CSRF required; consumes the AI rate-limit bucket |
+
+`type` accepts exactly the five approved classes:
+
+`NUMERIC_CONFLICT` · `TEMPORAL_CONFLICT` · `ATTRIBUTE_CONFLICT` ·
+`CAUSAL_CONFLICT` · `POLARITY_CONFLICT`
+
+```jsonc
+// GET /contradictions?documentId=…
+{
+  "content": [{
+    "id": "…",
+    "contradictionType": "NUMERIC_CONFLICT",
+    "severity": "HIGH",                 // LOW | MEDIUM | HIGH — impact, not probability
+    "subjectEntity": "Alpha",
+    "explanation": "The revenue growth values differ for the same company and year.",
+    "model": "gpt-oss-20b",
+    "detectedAt": "…",
+    "claimA": "Alpha Corp reported revenue growth of 42% in 2023.",
+    "documentAId": "…", "documentAName": "annual-report.pdf", "pageA": 1, "chunkAId": "…",
+    "claimB": "Alpha Corp reported revenue growth of 38% in 2023.",
+    "documentBId": "…", "documentBName": "board-notes.pdf", "pageB": 2, "chunkBId": "…"
+  }],
+  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "first": true, "last": true
+}
+```
+
+```jsonc
+// GET /contradictions/stats
+{
+  "total": 1,
+  "byType": {
+    "NUMERIC_CONFLICT": 1, "TEMPORAL_CONFLICT": 0, "ATTRIBUTE_CONFLICT": 0,
+    "CAUSAL_CONFLICT": 0, "POLARITY_CONFLICT": 0
+  },
+  "bySeverity": { "LOW": 0, "MEDIUM": 0, "HIGH": 1 },
+  "lastDetectedAt": "…"            // newest stored finding; null when none
+}
+```
+
+```jsonc
+// POST /contradictions/detect  { "documentIds": ["…"] }
+{
+  "status": "COMPLETED",            // COMPLETED | FAILED | SKIPPED
+  "scope": "DOCUMENT",              // DOCUMENT | LIBRARY
+  "analyzedDocumentIds": ["…", "…"],
+  "analyzedDocuments": 2,
+  "analyzedClaims": 8,
+  "candidatePairs": 3,
+  "found": 1,
+  "stored": 1,
+  "model": "gpt-oss-20b",
+  "detectedAt": "…",
+  "error": null
+}
+```
+
+Semantics:
+
+- **Candidate generation is deterministic.** Document chunks are split into
+  claims; pairs must share a subject entity (proper noun or a meaningful topic
+  token), and the work is bounded (documents, chunks, claims, pairs).
+- **One bounded model call classifies pairs.** It must reject scope differences,
+  complementary facts, different time windows, and paraphrases with the same
+  meaning. Unknown classes/severities or unflagged pairs are ignored.
+- **Both claims and citations are always stored** — claim text, document IDs and
+  names, page numbers, and chunk IDs for each side. The UI links to the document.
+- **`severity` is impact, not detection probability.** `LOW | MEDIUM | HIGH`
+  describes potential materiality to a decision.
+- **Failures store nothing.** A model error or invalid JSON returns `FAILED`
+  and leaves earlier findings untouched. A successful run (including a valid
+  empty result) replaces the analyzed scope atomically.
+- A `documentIds` run analyzes those documents plus a bounded set of recent
+  READY documents as comparison context. Omitting it scans the bounded library.
+- Findings are removed when their documents are deleted or reprocessed.
+- `lastDetectedAt` is the newest **stored** finding, not the last scan attempt.
+  A clean scan (or one that fails) stores nothing, so the value stays null or
+  unchanged.
+
+---
+
 ## Reports — `/reports` (Phase 3)
 
 | Method | Path | Notes |
@@ -368,7 +455,7 @@ is synthesized. Research-session history is served by the existing
 | Login per IP | `rate-limit.login` | 429 + `Retry-After` |
 | Login per account (any IP) | `rate-limit.login` | same window/limit, separate bucket |
 | Uploads per user | `rate-limit.upload` | 429 |
-| AI requests per user (chat, summaries, verify) | `rate-limit.ai` | 429 |
+| AI requests per user (chat, summaries, verify, contradiction detection) | `rate-limit.ai` | 429 |
 
 A non-positive configured limit disables that check (set `0` for unlimited).
 
@@ -384,3 +471,7 @@ A non-positive configured limit disables that check (set `0` for unlimited).
 | `SEARCH_MAX_RESULTS` / `SEARCH_DEFAULT_RESULTS` | `30` / `20` | Search cap / default |
 | `VERIFY_ENABLED` / `VERIFY_MODEL` | `true` / *(chat model)* | Claim verification switch / dedicated model |
 | `VERIFY_MAX_CLAIMS` / `VERIFY_MAX_TOKENS` | `25` / `2500` | Per-message analysis cap / model budget |
+| `CONTRADICTION_ENABLED` / `CONTRADICTION_MODEL` | `true` / *(chat model)* | Contradiction detection switch / dedicated model |
+| `CONTRADICTION_MAX_DOCUMENTS` | `6` | Documents analyzed per run (selected + comparison context) |
+| `CONTRADICTION_MAX_CHUNKS_PER_DOCUMENT` / `CONTRADICTION_MAX_CLAIMS_PER_DOCUMENT` | `12` / `20` | Bounds on deterministic claim extraction |
+| `CONTRADICTION_MAX_PAIRS` / `CONTRADICTION_MAX_TOKENS` | `30` / `3000` | Model-call pair cap / token budget |
