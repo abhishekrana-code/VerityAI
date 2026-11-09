@@ -31,13 +31,16 @@ Run a single class:
 | Frontend | Vitest + jsdom | API client, error mapping |
 
 Every Testcontainers class boots a **fresh** PostgreSQL container with Flyway
-migrations V1-V7 applied, so schema regressions surface immediately.
+migrations V1-V8 applied, so schema regressions surface immediately.
 
 ## External dependencies in tests
 
 - **LLM (Groq): never called.** Integration tests that exercise chat or claim
   verification replace `LlmService` with a mock (`@MockitoBean`) that returns
   canned responses, so the suite is deterministic and offline-safe.
+- **Mail (SMTP): never called.** `PasswordResetIntegrationTest` mocks
+  `MailService`, captures the reset link, and exercises token single-use,
+  expiry, password change, and session invalidation without a real mailbox.
 - **Embedding model (ONNX): downloaded once, then cached** at
   `~/.verityai/models` with SHA-256 verification. Semantic-search tests embed
   for real and are **skipped (not failed)** via `assumeTrue(...)` when the
@@ -52,11 +55,14 @@ migrations V1-V7 applied, so schema regressions surface immediately.
 
 | Class | Tests | Covers |
 |---|---:|---|
-| `AuthIntegrationTest` | 9 | Register/login/logout, session cookie, CSRF contract, 401s |
+| `AuthIntegrationTest` | 13 | Register (generic, session-free), login/logout, session-id rotation, single-session policy, profile persistence across password changes, CSRF contract, 401s |
 | `DocumentIntelligenceIntegrationTest` | 18 | List filters/sort whitelist, tags, collections, processing history, summaries lifecycle, bulk delete, file access |
-| `RateLimitIntegrationTest` | 3 | 429 + `Retry-After` at the HTTP layer |
+| `RateLimitIntegrationTest` | 4 | 429 + `Retry-After` at the HTTP layer; fake-PDF magic-byte rejection |
+| `ForwardedHeaderIntegrationTest` | 1 | `X-Forwarded-For` from a trusted loopback peer drives the per-IP limiter |
+| `CorsIntegrationTest` | 2 | Configured origin allowed with credentials; unlisted origin rejected |
+| `PasswordResetIntegrationTest` | 5 | Generic request response, token capture, single-use/expiry, password change, session invalidation |
 | `DocumentChunkRepositoryTest` | 6 | FTS relevance, scoped search, soft-delete/user isolation |
-| `RateLimitServiceTest` | 8 | Per-IP/per-account/per-user buckets, disabled limits |
+| `RateLimitServiceTest` | 10 | Per-IP/per-account/per-user buckets, registration/reset buckets, disabled limits |
 | `ChatServiceTest` | 6 | Evidence → answer → citation persistence logic |
 | `GroqLlmServiceTest` | 13 | `[Sn]` extraction (incl. CJK brackets), multi-document prompt, evidence-injection hardening |
 | `OnnxEmbeddingServiceTest` | 5 | Real model: download/checksum, pooling, normalization, mask handling |
@@ -68,8 +74,10 @@ migrations V1-V7 applied, so schema regressions surface immediately.
 | `IntelligencePagesIntegrationTest` | 8 | **Phase 3 read models:** deterministic graph build (entities, summary-type merge, CO_OCCURS edges, type filter, ownership 404), verification list/stats/filters, report index (facts vs interpretations), processing-history ordering/errors, 401 on all read models |
 | `ContradictionServiceTest` | 16 | **Feature 8 deterministic layer:** proper/topic/number/year extraction, shared-subject pairing, same-chunk/identical/duplicate rejection, pair cap, five-class + severity mapping, strict JSON parsing, canonical pair keys, prompt contract (scope/complementary/time/paraphrase exclusions) |
 | `ContradictionIntegrationTest` | 5 | **Feature 8 endpoints:** detection stores both claims + document/page citations, class/severity filters and stats, failed model/invalid JSON store nothing and keep earlier findings, valid empty result replaces scope, no-candidate runs skip the model, ownership/404, unprocessed 400, CSRF, 401 |
+| `CorsConfigTest` | 3 | Origin list parsing (trim, blanks, duplicates) and empty configuration |
+| `ProcessingExecutorTest` | 1 | Saturated pool rejects instead of running PDF work on the request thread |
 
-**Total: 135 backend tests.**
+**Total: 154 backend tests.**
 
 ### Notable behaviors the tests pin down
 

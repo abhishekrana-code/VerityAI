@@ -33,13 +33,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * context (and therefore fresh limiter state) separate from AuthIntegrationTest.
  *
  * <p>Quota isolation between test methods: the login quota is per client IP
- * (MockMvc reports 127.0.0.1 for every request) and only {@code loginTest}
- * performs /login calls; the other tests obtain their session through
- * /auth/register, which does not bear on the login quota. Upload and AI quotas
- * are per user, and each test registers its own user.
+ * (MockMvc reports 127.0.0.1 unless a test overrides it). The {@code register}
+ * helper logs in from a random IP so helpers do not consume each other's
+ * quota; {@code thirdLoginFromSameIpReturns429} pins one IP for its three
+ * attempts. Upload and AI quotas are per user, and each test registers its own
+ * user.
  */
 @SpringBootTest(properties = {
     "verityai.upload.dir=target/test-uploads",
+    "verityai.rate-limit.register-per-hour-ip=1000",
     "verityai.rate-limit.login-per-minute-ip=2",
     "verityai.rate-limit.uploads-per-hour=1",
     "verityai.rate-limit.ai-requests-per-minute=1",
@@ -72,16 +74,41 @@ class RateLimitIntegrationTest {
             "displayName", "Rate Limit Test"));
     }
 
-    /** Registers a fresh user and returns the session cookie of the response. */
+    /** Registers a fresh user and returns the session cookie established by login. */
     private Cookie register(String email) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
+        registerOnly(email);
+        return login(email, uniqueIp());
+    }
+
+    /** Creates the account without a session (registration is intentionally session-free). */
+    private void registerOnly(String email) throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(email)))
+            .andExpect(status().isOk());
+    }
+
+    private Cookie login(String email, String ip) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(ip);
+                    return request;
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isOk())
             .andReturn();
         Cookie session = result.getResponse().getCookie("SESSION");
-        assertThat(session).as("SESSION cookie after register").isNotNull();
+        assertThat(session).as("SESSION cookie after login").isNotNull();
         return session;
+    }
+
+    /** Keeps the shared per-IP login quota isolated between test methods. */
+    private static String uniqueIp() {
+        java.util.concurrent.ThreadLocalRandom random =
+            java.util.concurrent.ThreadLocalRandom.current();
+        return "10." + random.nextInt(1, 255) + "." + random.nextInt(1, 255)
+            + "." + random.nextInt(1, 255);
     }
 
     /** Provisions the XSRF-TOKEN cookie + token exactly like the browser flow. */
@@ -100,19 +127,31 @@ class RateLimitIntegrationTest {
     @Test
     void thirdLoginFromSameIpReturns429() throws Exception {
         String email = uniqueEmail();
-        register(email); // account creation does not consume login quota
+        registerOnly(email); // account creation does not consume login quota
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr("203.0.113.10");
+                    return request;
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr("203.0.113.10");
+                    return request;
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr("203.0.113.10");
+                    return request;
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isTooManyRequests())
@@ -170,5 +209,23 @@ class RateLimitIntegrationTest {
             .andExpect(status().isTooManyRequests())
             .andExpect(header().string("Retry-After", "3600"))
             .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+    }
+
+    @Test
+    void uploadWithPdfExtensionButNoMagicBytesIsRejectedBeforeStorage() throws Exception {
+        Cookie session = register(uniqueEmail());
+        Csrf csrf = csrf(session);
+
+        MockMultipartFile fake = new MockMultipartFile(
+            "file", "fake.pdf", "application/pdf",
+            "this is definitely not a pdf".getBytes(StandardCharsets.US_ASCII));
+        mockMvc.perform(multipart("/api/v1/documents")
+                .file(fake)
+                .cookie(session, csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+            .andExpect(jsonPath("$.message")
+                .value(org.hamcrest.Matchers.containsString("%PDF-")));
     }
 }

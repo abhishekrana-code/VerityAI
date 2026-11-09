@@ -12,7 +12,7 @@ VerityAI is a full-stack AI research platform that lets users upload PDFs and as
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui, TanStack Query, React Router 7 |
+| Frontend | React 18, TypeScript, Vite 5, Tailwind CSS 3, TanStack Query, React Router 6 |
 | Backend | Java 21, Spring Boot 3.5, Maven Wrapper, Spring Security (Session + CSRF), Spring Data JPA, Flyway |
 | Database | PostgreSQL 17 (Docker), full-text search |
 | AI | Groq API (OpenAI-compatible), Java `HttpClient` + Jackson |
@@ -130,15 +130,26 @@ Phase 3 additions (all optional):
   `CONTRADICTION_MAX_CHUNKS_PER_DOCUMENT`, `CONTRADICTION_MAX_CLAIMS_PER_DOCUMENT`,
   `CONTRADICTION_MAX_PAIRS`, `CONTRADICTION_MAX_TOKENS` — contradiction detection
 
-Note: the backend's JDBC credentials
-are set in `backend/src/main/resources/application.yml` — keep
-`POSTGRES_PASSWORD` at its default (`verityai_dev`), or change both together.
+Production/security additions (all optional except the DB secret):
+- `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` —
+  explicit DB overrides; the password falls back to `POSTGRES_PASSWORD`
+- `CORS_ALLOWED_ORIGINS` — comma-separated explicit origins (credentials enabled)
+- `FORWARD_HEADERS_STRATEGY`, `TRUSTED_PROXY_PATTERN` — trust `X-Forwarded-*` only
+  from loopback/private proxies
+- `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`,
+  `MAIL_STARTTLS`, `MAIL_SSL` — password-reset email; leave `MAIL_HOST` empty to disable
+- `APP_BASE_URL`, `PASSWORD_RESET_TOKEN_TTL_MINUTES` — reset-link origin and expiry
+- `RATE_LIMIT_REGISTER_PER_HOUR_IP`, `RATE_LIMIT_PASSWORD_RESET_PER_HOUR_IP`,
+  `RATE_LIMIT_PASSWORD_RESET_PER_HOUR_ACCOUNT` — pre-auth abuse limits
+
+Changing `POSTGRES_PASSWORD` updates both Docker Compose and the backend unless
+`SPRING_DATASOURCE_PASSWORD` is set explicitly.
 
 ---
 
 ## Testing & CI
 
-- **Backend**: 135 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
+- **Backend**: 154 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
   Run `cd backend && .\mvnw.cmd test` (Docker must be running). See [docs/testing.md](docs/testing.md).
 - **Frontend**: 17 tests — Vitest + jsdom. Run `cd frontend && npm test`.
 - **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend) and lint/typecheck/test/build
@@ -161,7 +172,8 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/auth/register`, `/auth/login`, `/auth/logout` | Session cookie auth; CSRF-exempt |
+| POST | `/auth/register`, `/auth/login`, `/auth/logout` | Session cookie auth; CSRF-exempt. Registration is session-free and returns a generic response |
+| POST | `/auth/password-reset/request`, `/auth/password-reset/confirm` | Non-enumerating reset request; single-use token confirmation invalidates all sessions |
 | GET | `/auth/csrf`, `/auth/me` | Provision CSRF token / current user |
 | PATCH | `/auth/users/me` | Profile update |
 | POST | `/auth/users/me/password` | Change password |

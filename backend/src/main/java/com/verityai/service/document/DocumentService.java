@@ -85,7 +85,11 @@ public class DocumentService {
                     Path filePath = uploadPath.resolve(doc.getStoredFilename());
                     if (Files.exists(filePath)) {
                         log.info("Recovering document {} ({}), queuing for reprocessing...", doc.getId(), doc.getOriginalFilename());
-                        processingExecutor.submit(() -> processDocument(doc.getId(), filePath));
+                        try {
+                            processingExecutor.submit(() -> processDocument(doc.getId(), filePath));
+                        } catch (org.springframework.core.task.TaskRejectedException e) {
+                            log.warn("Processing queue full during recovery; document {} will retry on next start", doc.getId());
+                        }
                     } else {
                         doc.setStatus(Document.DocumentStatus.FAILED);
                         doc.setErrorCode("INTERRUPTED");
@@ -101,6 +105,12 @@ public class DocumentService {
 
     @Transactional
     public Document upload(UUID userId, MultipartFile file) {
+        // Reject early when the bounded processing pool cannot accept work.
+        // Uploads must never fall back to doing PDF work on the request thread.
+        if (!processingExecutor.hasCapacity()) {
+            throw ApiException.queueFull(
+                "Document processing queue is full, please retry shortly", 30);
+        }
         validateFile(file);
 
         String sha256;
@@ -129,7 +139,9 @@ public class DocumentService {
         document.getUser().setId(userId);
         document.setOriginalFilename(file.getOriginalFilename());
         document.setStoredFilename(storedFilename);
-        document.setMimeType(file.getContentType());
+        // We verified the %PDF- signature, so store the detected type rather
+        // than trusting the browser-supplied Content-Type.
+        document.setMimeType("application/pdf");
         document.setSizeBytes(file.getSize());
         document.setSha256(sha256);
         document.setStatus(Document.DocumentStatus.UPLOADED);
@@ -139,21 +151,47 @@ public class DocumentService {
 
         // Process asynchronously after the transaction commits
         Document savedDocument = document;
-        runAfterCommit(() -> processDocument(savedDocument.getId(), filePath));
+        runAfterCommit(savedDocument.getId(), () -> processDocument(savedDocument.getId(), filePath));
 
         return document;
     }
 
-    private void runAfterCommit(Runnable task) {
+    private void runAfterCommit(UUID documentId, Runnable task) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    processingExecutor.submit(task);
+                    submitOrMarkRejected(documentId, task);
                 }
             });
         } else {
+            submitOrMarkRejected(documentId, task);
+        }
+    }
+
+    /**
+     * The capacity check in {@link #upload} is an early-out, not a reservation.
+     * If the pool fills between check and commit, record a retryable failure
+     * instead of throwing into the transaction callback (which would leave the
+     * document stuck in UPLOADED until the next restart).
+     */
+    private void submitOrMarkRejected(UUID documentId, Runnable task) {
+        try {
             processingExecutor.submit(task);
+        } catch (org.springframework.core.task.TaskRejectedException e) {
+            log.warn("Processing queue rejected document {}; marking it FAILED for retry", documentId);
+            try {
+                documentRepository.findById(documentId).ifPresent(doc -> {
+                    if (doc.getDeletedAt() == null) {
+                        doc.setStatus(Document.DocumentStatus.FAILED);
+                        doc.setErrorCode("QUEUE_FULL");
+                        doc.setErrorMessage("Processing queue was full. Please delete this upload and try again.");
+                        documentRepository.save(doc);
+                    }
+                });
+            } catch (Exception saveEx) {
+                log.error("Failed to mark rejected document {} as FAILED", documentId, saveEx);
+            }
         }
     }
 
@@ -171,6 +209,18 @@ public class DocumentService {
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
             throw ApiException.validation("File must have .pdf extension");
+        }
+        // Content-Type and extension are attacker-controlled. The PDF spec
+        // allows leading bytes, so require the %PDF- signature within the
+        // first 1024 bytes before storing anything.
+        try (java.io.InputStream in = file.getInputStream()) {
+            byte[] header = in.readNBytes(1024);
+            String head = new String(header, java.nio.charset.StandardCharsets.ISO_8859_1);
+            if (!head.contains("%PDF-")) {
+                throw ApiException.validation("File is not a valid PDF (missing %PDF- header)");
+            }
+        } catch (IOException e) {
+            throw ApiException.validation("Could not read uploaded file");
         }
     }
 
@@ -355,6 +405,11 @@ public class DocumentService {
         Document document = documentRepository.findByIdAndUserIdAndDeletedAtIsNull(documentId, userId)
             .orElseThrow(() -> ApiException.notFound("Document not found"));
 
+        if (!processingExecutor.hasCapacity()) {
+            throw ApiException.queueFull(
+                "Document processing queue is full, please retry shortly", 30);
+        }
+
         if (document.getStatus() == Document.DocumentStatus.READY) {
             throw ApiException.validation("Document is already processed");
         }
@@ -383,7 +438,7 @@ public class DocumentService {
                 "Original PDF file is missing on the server - delete this document and re-upload it");
         }
 
-        runAfterCommit(() -> processDocument(documentId, filePath));
+        runAfterCommit(documentId, () -> processDocument(documentId, filePath));
 
         return document;
     }

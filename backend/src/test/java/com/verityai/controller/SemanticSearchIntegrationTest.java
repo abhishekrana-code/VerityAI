@@ -54,6 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(properties = {
     "verityai.upload.dir=target/test-uploads-search",
+    "verityai.rate-limit.register-per-hour-ip=1000",
     "verityai.summary.enabled=false",
     "verityai.search.max-results=5",
     "logging.level.org.hibernate.SQL=WARN",
@@ -84,15 +85,35 @@ class SemanticSearchIntegrationTest {
     }
 
     private Cookie register(String email) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "email", email, "password", PASSWORD, "displayName", "Search Test"))))
+            .andExpect(status().isOk());
+        return login(email);
+    }
+
+    private Cookie login(String email) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(uniqueIp());
+                    return request;
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "email", email, "password", PASSWORD, "displayName", "Search Test"))))
             .andExpect(status().isOk())
             .andReturn();
         Cookie session = result.getResponse().getCookie("SESSION");
-        assertThat(session).as("SESSION cookie after register").isNotNull();
+        assertThat(session).as("SESSION cookie after login").isNotNull();
         return session;
+    }
+
+    private static String uniqueIp() {
+        java.util.concurrent.ThreadLocalRandom random =
+            java.util.concurrent.ThreadLocalRandom.current();
+        return "10." + random.nextInt(1, 255) + "." + random.nextInt(1, 255)
+            + "." + random.nextInt(1, 255);
     }
 
     private Csrf csrf(Cookie session) throws Exception {

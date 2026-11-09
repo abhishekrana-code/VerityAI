@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,6 +33,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(properties = {
     "verityai.upload.dir=target/test-uploads",
+    "verityai.rate-limit.register-per-hour-ip=1000",
+    "verityai.rate-limit.password-reset-per-hour-ip=1000",
+    "verityai.rate-limit.password-reset-per-hour-account=1000",
     "logging.level.org.hibernate.SQL=WARN",
     "logging.level.org.hibernate.orm.jdbc.bind=OFF"
 })
@@ -64,21 +68,40 @@ class AuthIntegrationTest {
     }
 
     /**
-     * Registers a fresh user and returns the session cookie established by
-     * the response (Spring Session stores auth state server-side, keyed by
-     * this cookie - mirroring how a browser carries the session).
+     * Registers a fresh user (no session is created) and then logs in,
+     * returning the session cookie established by the login response.
      */
     private Cookie register(String email) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(email)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(false));
+        return login(email);
+    }
+
+    private Cookie login(String email) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(uniqueIp());
+                    return request;
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.authenticated").value(true))
-            .andExpect(jsonPath("$.user.email").value(email))
             .andReturn();
         Cookie sessionCookie = result.getResponse().getCookie("SESSION");
-        assertThat(sessionCookie).as("SESSION cookie after register").isNotNull();
+        assertThat(sessionCookie).as("SESSION cookie after login").isNotNull();
         return sessionCookie;
+    }
+
+    /** Keeps the shared per-IP login quota isolated between test methods. */
+    private static String uniqueIp() {
+        java.util.concurrent.ThreadLocalRandom random =
+            java.util.concurrent.ThreadLocalRandom.current();
+        return "10." + random.nextInt(1, 255) + "." + random.nextInt(1, 255)
+            + "." + random.nextInt(1, 255);
     }
 
     @Test
@@ -94,15 +117,117 @@ class AuthIntegrationTest {
     }
 
     @Test
-    void duplicateRegistrationReturnsConflict() throws Exception {
+    void duplicateRegistrationIsIndistinguishableFromNewRegistration() throws Exception {
         String email = uniqueEmail();
         register(email);
 
         mockMvc.perform(post("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
-            .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.code").value("CONFLICT"));
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(false))
+            .andExpect(jsonPath("$.user").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void registrationDoesNotCreateAnAuthenticatedSession() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(uniqueEmail())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(false))
+            .andReturn();
+
+        assertThat(result.getResponse().getCookie("SESSION"))
+            .as("registration must not establish a session")
+            .isNull();
+    }
+
+    @Test
+    void loginRotatesTheSessionId() throws Exception {
+        String attackerEmail = uniqueEmail();
+        String victimEmail = uniqueEmail();
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(attackerEmail)))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(victimEmail)))
+            .andExpect(status().isOk());
+
+        // Attacker has a real authenticated session they plant in the victim's
+        // browser, then the victim logs in with that cookie.
+        Cookie planted = login(attackerEmail);
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                .cookie(planted)
+                .with(request -> {
+                    request.setRemoteAddr(uniqueIp());
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(victimEmail)))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        Cookie rotated = loginResult.getResponse().getCookie("SESSION");
+        assertThat(rotated).as("SESSION cookie after login").isNotNull();
+        assertThat(rotated.getValue())
+            .as("session id must change on authentication")
+            .isNotEqualTo(planted.getValue());
+
+        // The planted cookie is dead (neither the attacker's nor the victim's
+        // identity remains attached to it).
+        mockMvc.perform(get("/api/v1/conversations").cookie(planted))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/auth/me").cookie(rotated))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(true))
+            .andExpect(jsonPath("$.user.email").value(victimEmail));
+    }
+
+    @Test
+    void secondLoginInvalidatesTheFirstSession() throws Exception {
+        String email = uniqueEmail();
+        mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(email)))
+            .andExpect(status().isOk());
+
+        MvcResult first = mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(uniqueIp());
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(email)))
+            .andExpect(status().isOk())
+            .andReturn();
+        Cookie firstSession = first.getResponse().getCookie("SESSION");
+        assertThat(firstSession).isNotNull();
+
+        MvcResult second = mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(uniqueIp());
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(email)))
+            .andExpect(status().isOk())
+            .andReturn();
+        Cookie secondSession = second.getResponse().getCookie("SESSION");
+        assertThat(secondSession).isNotNull();
+
+        // Old device is signed out (JSON 401 on a protected endpoint) ...
+        mockMvc.perform(get("/api/v1/conversations").cookie(firstSession))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        // ... the new device remains authenticated.
+        mockMvc.perform(get("/api/v1/auth/me").cookie(secondSession))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(true))
+            .andExpect(jsonPath("$.user.email").value(email));
     }
 
     @Test
@@ -200,5 +325,49 @@ class AuthIntegrationTest {
                 assertThat(cleared).as("SESSION deletion cookie after logout").isNotNull();
                 assertThat(cleared.getMaxAge()).isZero();
             });
+    }
+
+    @Test
+    void profileUpdateIsVisibleImmediatelyAndSurvivesPasswordChange() throws Exception {
+        String email = uniqueEmail();
+        Cookie session = register(email);
+
+        mockMvc.perform(patch("/api/v1/auth/users/me")
+                .cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"displayName\":\"Updated Name\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.displayName").value("Updated Name"));
+
+        // The session principal is a snapshot; /auth/me must reflect the update
+        // without requiring a new login.
+        mockMvc.perform(get("/api/v1/auth/me").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.displayName").value("Updated Name"));
+
+        // Changing the password must not merge a stale principal back over the
+        // profile fields that were just updated.
+        mockMvc.perform(post("/api/v1/auth/users/me/password")
+                .cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"currentPassword\":\"" + PASSWORD
+                    + "\",\"newPassword\":\"new-password-123\"}"))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.displayName").value("Updated Name"));
+
+        MvcResult relogin = mockMvc.perform(post("/api/v1/auth/login")
+                .with(request -> {
+                    request.setRemoteAddr(uniqueIp());
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + email + "\",\"password\":\"new-password-123\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.user.displayName").value("Updated Name"))
+            .andReturn();
+        assertThat(relogin.getResponse().getCookie("SESSION")).isNotNull();
     }
 }

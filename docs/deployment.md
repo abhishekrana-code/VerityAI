@@ -61,9 +61,17 @@ nano .env
 | Key | Production value | Why |
 |---|---|---|
 | `SPRING_PROFILES_ACTIVE` | `prod` | Quiet logs; secure cookie default (see `application-prod.yml`) |
+| `POSTGRES_PASSWORD` | a strong random value | Used by both Docker Compose and the backend (unless `SPRING_DATASOURCE_PASSWORD` is set) |
 | `GROQ_API_KEY` | your real key | Required for chat |
 | `UPLOAD_DIR` | `/var/lib/verityai/uploads` | Absolute path outside the web root |
+| `APP_BASE_URL` | `https://verity.yourdomain.com` | Origin used in password-reset emails |
+| `CORS_ALLOWED_ORIGINS` | `https://verity.yourdomain.com` | Explicit allowed origin (credentials enabled; no `*`) |
+| `MAIL_HOST` | e.g. `smtp.gmail.com` | Enables password-reset email; leave empty to disable |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP credentials | Sender account / app password |
+| `MAIL_FROM` | e.g. `no-reply@yourdomain.com` | From address (defaults to `MAIL_USERNAME`) |
 | `RATE_LIMIT_LOGIN_PER_MINUTE_IP` | e.g. `10` | Tune per your usage |
+| `RATE_LIMIT_REGISTER_PER_HOUR_IP` | e.g. `10` | Registration abuse limit |
+| `RATE_LIMIT_PASSWORD_RESET_PER_HOUR_IP` / `..._ACCOUNT` | e.g. `5` / `3` | Reset-email abuse limits |
 | `RATE_LIMIT_UPLOADS_PER_HOUR` | e.g. `10` | Tune per your usage |
 | `RATE_LIMIT_AI_REQUESTS_PER_MINUTE` | e.g. `20` | Tune per your usage; `0` disables |
 
@@ -99,6 +107,11 @@ sudo cp -r dist/* /var/www/verityai/
 > ```
 >
 > Take a `pg_dump` backup first if this is anything but a dev machine.
+>
+> **Upgrading to the current release:** Flyway applies `V8__password_reset_tokens.sql`
+> automatically on first backend start (single-use, hashed reset tokens). No
+> manual step is required. Set `MAIL_*` and `APP_BASE_URL` before advertising
+> password reset to users.
 
 ## 5. Backend as a systemd Service
 
@@ -147,6 +160,13 @@ server {
     root /var/www/verityai;
     index index.html;
 
+    # Cloudflare Tunnel connects from loopback. Trust only that peer to supply
+    # the client IP, and take it from CF-Connecting-IP (set by Cloudflare).
+    set_real_ip_from 127.0.0.1;
+    set_real_ip_from ::1;
+    real_ip_header CF-Connecting-IP;
+    real_ip_recursive on;
+
     # Static SPA
     location / {
         try_files $uri $uri/ /index.html;
@@ -157,12 +177,21 @@ server {
         proxy_pass http://127.0.0.1:8080/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # OVERWRITE, never append: a client-supplied X-Forwarded-For must not
+        # survive into the backend, which trusts loopback proxy headers.
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         client_max_body_size 30m;   # ≥ MAX_FILE_SIZE_MB
     }
 }
 ```
+
+> **Client-IP correctness matters for rate limiting.** The backend honours
+> `X-Forwarded-For` only from peers matching `TRUSTED_PROXY_PATTERN`
+> (loopback by default). If nginx runs in a container or on another host, add
+> its address to that regex and make sure it *sets* (not appends) the header.
+> With Cloudflare Tunnel, `real_ip_header CF-Connecting-IP` makes `$remote_addr`
+> the real visitor; without Cloudflare, `$remote_addr` is already the client.
 
 > `/actuator` is intentionally **not** proxied — health checks run on the
 > server itself (`curl http://localhost:8080/...`), and the firewall below
@@ -268,11 +297,18 @@ After `systemctl restart verityai` + nginx:
 
 1. `curl -fsS http://localhost:8080/actuator/health/liveness` → `{"status":"UP"}`
 2. `curl -fsS http://localhost:8080/actuator/health/readiness` → `{"status":"UP"}`
-3. Open `http://<server>/` → landing page loads
-4. Register → login → upload a PDF → wait for `READY` → ask a question →
-   answer includes citations
+3. Open `http://<server>/` → landing page loads; favicon and social metadata resolve
+4. Register → sign in (registration does **not** create a session) → upload a PDF →
+   wait for `READY` → ask a question → answer includes citations
 5. Exceed `RATE_LIMIT_AI_REQUESTS_PER_MINUTE` → response is `429` with a
    `Retry-After` header and the UI shows “Rate limit reached”
+6. If `MAIL_HOST` is configured: request a password reset, open the emailed
+   link, set a new password, and confirm the old session is signed out
+7. Sign in from a second browser → the first session receives `401` (single
+   session per account)
+8. Upload a non-PDF renamed to `.pdf` → `400 VALIDATION_ERROR` (magic-byte gate)
+9. From a foreign `Origin`, send a CORS preflight → rejected; the configured
+   `CORS_ALLOWED_ORIGINS` origin is allowed with credentials
 
 ## Operations
 
@@ -296,5 +332,8 @@ cd /opt/verityai && git checkout <previous-tag-or-commit>
 | `403` on POST/DELETE from a custom client | Missing CSRF: fetch `GET /api/v1/auth/csrf`, send the `XSRF-TOKEN` cookie back as `X-XSRF-TOKEN` header |
 | `429 RATE_LIMITED` / `AI_RATE_LIMITED` | Expected when quotas are exhausted; wait `Retry-After` seconds or raise `RATE_LIMIT_*` in `.env` |
 | Chat answers “LLM call failed” | `GROQ_API_KEY` missing/invalid in `.env` (service runs without it) |
+| Password-reset email never arrives | `MAIL_HOST`/credentials unset, or the SMTP provider rejected the sender; reset requests still return `200` by design. Check `journalctl -u verityai` for mail errors |
+| `429 RATE_LIMITED` on registration/reset | The per-IP (and per-account) pre-auth limits are working; wait `Retry-After` or raise the `RATE_LIMIT_*` values |
+| Upload returns `503 QUEUE_FULL` | The bounded document-processing queue is saturated; retry after `Retry-After` (the file is not stored) |
 | Uploads stuck in `PROCESSING`/`FAILED` | Check `journalctl -u verityai`; `UPLOAD_DIR` must exist and be writable by the service user |
 | Backend won't start: DB connection refused | `docker compose ps` — Postgres not up; `docker compose up -d postgres` |

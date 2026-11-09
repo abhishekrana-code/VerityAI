@@ -63,8 +63,6 @@ public class SecurityConfig {
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                .maximumSessions(1)
-                .maxSessionsPreventsLogin(false)
             )
             .logout(logout -> logout
                 .logoutUrl("/api/v1/auth/logout")

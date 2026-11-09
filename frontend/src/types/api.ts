@@ -8,7 +8,8 @@ export interface User {
 }
 
 export interface AuthResponse {
-  user: User;
+  /** null for a generic registration response and for anonymous /auth/me. */
+  user: User | null;
   authenticated: boolean;
 }
 
@@ -290,6 +291,15 @@ export interface ChangePasswordRequest {
 
 export interface UpdateProfileRequest {
   displayName?: string;
+}
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  token: string;
+  newPassword: string;
 }
 
 // ---------------------------------------------------------------------------

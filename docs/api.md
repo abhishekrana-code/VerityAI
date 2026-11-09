@@ -21,13 +21,18 @@ Fetch a token first from `GET /auth/csrf`.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/auth/register` | `{ email, password, name? }` → creates user, sets session cookie |
-| POST | `/auth/login` | `{ email, password }` → sets session cookie. Rate-limited per client IP **and** per target account (429 + `Retry-After`) |
+| POST | `/auth/register` | `{ email, password, displayName? }` → creates the account. Always returns `200 { user: null, authenticated: false }` (no session, no account-existence disclosure). Rate-limited per client IP |
+| POST | `/auth/login` | `{ email, password }` → sets the session cookie, rotates the session id, and invalidates every other session for the account. Rate-limited per client IP **and** per target account (429 + `Retry-After`) |
 | POST | `/auth/logout` | Revokes the session |
-| GET | `/auth/me` | Current user (`401` when anonymous) |
+| GET | `/auth/me` | Current user (`200 { authenticated: false }` when anonymous) |
 | GET | `/auth/csrf` | `{ token }` + `XSRF-TOKEN` cookie |
-| PATCH | `/auth/users/me` | `{ name?, email? }` profile update |
+| POST | `/auth/password-reset/request` | `{ email }` → always `200` with an empty body. Emails a single-use link when the account exists and mail is configured. Rate-limited per IP and per account |
+| POST | `/auth/password-reset/confirm` | `{ token, newPassword }` → changes the password, consumes the token, and invalidates all sessions. Invalid/expired tokens return `400 VALIDATION_ERROR` |
+| PATCH | `/auth/users/me` | `{ displayName? }` profile update |
 | POST | `/auth/users/me/password` | `{ currentPassword, newPassword }` |
+
+> Registration deliberately does **not** sign the user in. Clients must call
+> `/auth/login` after a successful registration.
 
 ---
 
@@ -35,7 +40,7 @@ Fetch a token first from `GET /auth/csrf`.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/documents` | multipart `file` (PDF only). Enqueued for processing; returns the document with `status=UPLOADED/PROCESSING` |
+| POST | `/documents` | multipart `file` (PDF only; `%PDF-` signature required). Enqueued for processing; returns the document with `status=UPLOADED/PROCESSING`. Returns `503 QUEUE_FULL` + `Retry-After` when the bounded processing queue is saturated |
 | GET | `/documents` | Paginated list. Filters: `status`, `q`, `tagId`, `collectionId`, `page`, `size` |
 | GET | `/documents/{id}` | Detail incl. `sha256`, `pageCount`, tags, collection |
 | GET | `/documents/{id}/status` | Processing state (`UPLOADED`, `PROCESSING`, `READY`, `FAILED`) + `errorMessage` |
@@ -452,12 +457,18 @@ is synthesized. Research-session history is served by the existing
 
 | Scope | Config key | Default behavior |
 |---|---|---|
-| Login per IP | `rate-limit.login` | 429 + `Retry-After` |
-| Login per account (any IP) | `rate-limit.login` | same window/limit, separate bucket |
-| Uploads per user | `rate-limit.upload` | 429 |
-| AI requests per user (chat, summaries, verify, contradiction detection) | `rate-limit.ai` | 429 |
+| Login per IP | `rate-limit.login-per-minute-ip` | 429 + `Retry-After` (default 5/min) |
+| Login per account (any IP) | `rate-limit.login-per-minute-ip` | same window/limit, separate bucket |
+| Registration per IP | `rate-limit.register-per-hour-ip` | 429 + `Retry-After` (default 10/hour) |
+| Password reset per IP | `rate-limit.password-reset-per-hour-ip` | 429 + `Retry-After` (default 5/hour) |
+| Password reset per account | `rate-limit.password-reset-per-hour-account` | 429 + `Retry-After` (default 3/hour) |
+| Uploads per user | `rate-limit.uploads-per-hour` | 429 |
+| AI requests per user (chat, summaries, verify, contradiction detection) | `rate-limit.ai-requests-per-minute` | 429 |
 
 A non-positive configured limit disables that check (set `0` for unlimited).
+Client IPs come from `request.getRemoteAddr()` after Tomcat's forwarded-header
+processing; only peers matching `TRUSTED_PROXY_PATTERN` may supply
+`X-Forwarded-For`.
 
 ## Embeddings & retrieval configuration
 

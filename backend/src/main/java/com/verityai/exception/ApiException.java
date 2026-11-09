@@ -55,6 +55,11 @@ public class ApiException extends RuntimeException {
         return new ApiException(ErrorCode.RATE_LIMITED, message, 429);
     }
 
+    /** Processing capacity exhausted: retry later (503 + Retry-After). */
+    public static ApiException queueFull(String message, long retryAfterSeconds) {
+        return new ApiException(ErrorCode.QUEUE_FULL, message, 503, null, retryAfterSeconds);
+    }
+
     public static ApiException internal(String message) {
         return new ApiException(ErrorCode.INTERNAL_ERROR, message, 500);
     }

@@ -38,7 +38,9 @@ export function RegisterPage() {
     register(
       { email: data.email, password: data.password, displayName: data.displayName },
       {
-        onSuccess: () => navigate('/dashboard'),
+        // Registration is intentionally session-free: the account is created
+        // but the user must sign in explicitly.
+        onSuccess: () => navigate('/login?registered=1'),
       }
     );
   };
@@ -46,7 +48,7 @@ export function RegisterPage() {
   return (
     <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-12">
       <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-500/10 blur-[100px]" />
-      <div className="w-full max-w-md">
+      <main id="main-content" tabIndex={-1} className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center"><Logo to="/" /></div>
           <h1 className="mt-6 text-2xl font-bold">Create your account</h1>
@@ -55,8 +57,11 @@ export function RegisterPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="surface-card space-y-5 p-6 sm:p-8" noValidate>
           {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-lg bg-destructive/10 p-4 text-sm text-destructive"
+            >
+              <AlertCircle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
               <p>{error.error?.message || 'Registration failed. Please try again.'}</p>
             </div>
           )}
@@ -78,9 +83,11 @@ export function RegisterPage() {
               )}
               disabled={isPending}
               placeholder="you@example.com"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={errors.email ? 'email-error' : undefined}
             />
             {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
+              <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>
             )}
           </div>
 
@@ -120,9 +127,11 @@ export function RegisterPage() {
               )}
               disabled={isPending}
               placeholder="••••••••"
+              aria-invalid={Boolean(errors.password)}
+              aria-describedby={errors.password ? 'password-error' : undefined}
             />
             {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
+              <p id="password-error" className="text-sm text-destructive">{errors.password.message}</p>
             )}
           </div>
 
@@ -143,9 +152,13 @@ export function RegisterPage() {
               )}
               disabled={isPending}
               placeholder="••••••••"
+              aria-invalid={Boolean(errors.confirmPassword)}
+              aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
             />
             {errors.confirmPassword && (
-              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+              <p id="confirm-password-error" className="text-sm text-destructive">
+                {errors.confirmPassword.message}
+              </p>
             )}
           </div>
 
@@ -168,7 +181,7 @@ export function RegisterPage() {
             Sign in
           </Link>
         </p>
-      </div>
+      </main>
     </div>
   );
 }

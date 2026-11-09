@@ -119,4 +119,30 @@ class RateLimitServiceTest {
         service.checkLoginAccount(null);
         service.checkLoginAccount("   ");
     }
+
+    @Test
+    void registrationsAreLimitedPerIp() {
+        RateLimitService service = new RateLimitService(10, 10, 10, 1, 10, 10);
+
+        service.checkRegister("198.51.100.1");
+
+        assert429(() -> service.checkRegister("198.51.100.1"), ErrorCode.RATE_LIMITED, 3600);
+        // A different IP is unaffected.
+        service.checkRegister("198.51.100.2");
+    }
+
+    @Test
+    void passwordResetIsLimitedPerIpAndPerAccount() {
+        RateLimitService service = new RateLimitService(10, 10, 10, 10, 1, 1);
+
+        service.checkPasswordReset("198.51.100.1");
+        service.checkPasswordResetAccount("victim@example.com");
+
+        assert429(() -> service.checkPasswordReset("198.51.100.1"), ErrorCode.RATE_LIMITED, 3600);
+        assert429(() -> service.checkPasswordResetAccount("Victim@Example.com"),
+            ErrorCode.RATE_LIMITED, 3600);
+        // Independent buckets.
+        service.checkPasswordReset("198.51.100.2");
+        service.checkPasswordResetAccount("other@example.com");
+    }
 }

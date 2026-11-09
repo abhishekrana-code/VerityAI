@@ -78,7 +78,7 @@ export function LandingPage() {
       </header>
 
       {/* Hero */}
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <section className="relative isolate mx-auto w-full max-w-7xl overflow-hidden px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
           <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[520px] max-w-5xl rounded-full bg-indigo-500/[0.09] blur-[120px]" />
           <div className="subtle-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[540px] opacity-40" />
@@ -273,19 +273,19 @@ export function LandingPage() {
               </ul>
             </nav>
             <nav>
-              <h4 className="font-semibold mb-3">Company</h4>
+              <h4 className="font-semibold mb-3">Get started</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground">About</a></li>
-                <li><a href="#" className="hover:text-foreground">Blog</a></li>
-                <li><a href="#" className="hover:text-foreground">Careers</a></li>
+                <li><Link to="/register" className="hover:text-foreground">Create account</Link></li>
+                <li><Link to="/login" className="hover:text-foreground">Sign in</Link></li>
+                <li><Link to="/forgot-password" className="hover:text-foreground">Reset password</Link></li>
               </ul>
             </nav>
             <nav>
               <h4 className="font-semibold mb-3">Legal</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground">Privacy</a></li>
-                <li><a href="#" className="hover:text-foreground">Terms</a></li>
-                <li><a href="#" className="hover:text-foreground">Security</a></li>
+                <li><Link to="/privacy" className="hover:text-foreground">Privacy</Link></li>
+                <li><Link to="/terms" className="hover:text-foreground">Terms</Link></li>
+                <li><Link to="/security" className="hover:text-foreground">Security</Link></li>
               </ul>
             </nav>
           </div>

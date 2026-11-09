@@ -4,10 +4,12 @@ import com.verityai.exception.ApiException;
 import com.verityai.exception.ErrorCode;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,16 +18,23 @@ import java.util.concurrent.ConcurrentHashMap;
  * Fixed-window rate limiting backed by resilience4j {@link RateLimiter}s.
  *
  * <p>Limiters are created per key (authenticated user id, or client IP for the
- * pre-auth login endpoint) so one caller can never exhaust another caller's
- * quota. A non-positive configured limit disables that check entirely
- * (set to 0 for "unlimited" in the environment).
+ * pre-auth endpoints) so one caller can never exhaust another caller's quota.
+ * A non-positive configured limit disables that check entirely (set to 0 for
+ * "unlimited" in the environment).
+ *
+ * <p>Client IPs must come from {@code request.getRemoteAddr()}: Tomcat's
+ * RemoteIpValve is configured to replace it with the forwarded client address
+ * only when the request arrives from a trusted proxy.
  *
  * <p>Config keys (application.yml {@code verityai.rate-limit.*}, backed by the
  * {@code RATE_LIMIT_*} environment variables):
  * <ul>
- *   <li>{@code login} — attempts per minute per client IP</li>
- *   <li>{@code upload} — uploads per hour per user</li>
- *   <li>{@code ai} — chat/AI requests per minute per user</li>
+ *   <li>{@code login-per-minute-ip} — login attempts per minute per client IP</li>
+ *   <li>{@code register-per-hour-ip} — registrations per hour per client IP</li>
+ *   <li>{@code password-reset-per-hour-ip} — reset requests per hour per IP</li>
+ *   <li>{@code password-reset-per-hour-account} — reset requests per hour per account</li>
+ *   <li>{@code uploads-per-hour} — uploads per hour per user</li>
+ *   <li>{@code ai-requests-per-minute} — chat/AI requests per minute per user</li>
  * </ul>
  */
 @Service
@@ -37,17 +46,32 @@ public class RateLimitService {
     private static final Duration MAX_IDLE = Duration.ofHours(2);
 
     private final RateLimiterConfig loginConfig;
+    private final RateLimiterConfig registerConfig;
+    private final RateLimiterConfig passwordResetIpConfig;
+    private final RateLimiterConfig passwordResetAccountConfig;
     private final RateLimiterConfig uploadConfig;
     private final RateLimiterConfig aiConfig;
     private final Map<String, Entry> limiters = new ConcurrentHashMap<>();
 
+    @Autowired
     public RateLimitService(
             @Value("${verityai.rate-limit.login-per-minute-ip}") int loginPerMinuteIp,
             @Value("${verityai.rate-limit.uploads-per-hour}") int uploadsPerHour,
-            @Value("${verityai.rate-limit.ai-requests-per-minute}") int aiRequestsPerMinute) {
+            @Value("${verityai.rate-limit.ai-requests-per-minute}") int aiRequestsPerMinute,
+            @Value("${verityai.rate-limit.register-per-hour-ip:10}") int registerPerHourIp,
+            @Value("${verityai.rate-limit.password-reset-per-hour-ip:5}") int passwordResetPerHourIp,
+            @Value("${verityai.rate-limit.password-reset-per-hour-account:3}") int passwordResetPerHourAccount) {
         this.loginConfig = config(loginPerMinuteIp, Duration.ofMinutes(1));
+        this.registerConfig = config(registerPerHourIp, Duration.ofHours(1));
+        this.passwordResetIpConfig = config(passwordResetPerHourIp, Duration.ofHours(1));
+        this.passwordResetAccountConfig = config(passwordResetPerHourAccount, Duration.ofHours(1));
         this.uploadConfig = config(uploadsPerHour, Duration.ofHours(1));
         this.aiConfig = config(aiRequestsPerMinute, Duration.ofMinutes(1));
+    }
+
+    /** Convenience constructor for focused unit tests (registration/reset disabled). */
+    public RateLimitService(int loginPerMinuteIp, int uploadsPerHour, int aiRequestsPerMinute) {
+        this(loginPerMinuteIp, uploadsPerHour, aiRequestsPerMinute, 0, 0, 0);
     }
 
     /** Consumes one login attempt for this client IP; 429 when exhausted. */
@@ -65,8 +89,29 @@ public class RateLimitService {
         if (email == null || email.isBlank()) {
             return;
         }
-        acquire("loginacct", email.trim().toLowerCase(java.util.Locale.ROOT), loginConfig,
+        acquire("loginacct", email.trim().toLowerCase(Locale.ROOT), loginConfig,
                 ErrorCode.RATE_LIMITED, "Too many login attempts, please try again later", 60);
+    }
+
+    /** Consumes one registration slot for this client IP; 429 when exhausted. */
+    public void checkRegister(String clientIp) {
+        acquire("register", clientIp, registerConfig, ErrorCode.RATE_LIMITED,
+                "Too many registration attempts, please try again later", 3600);
+    }
+
+    /** Consumes one password-reset request slot for this client IP. */
+    public void checkPasswordReset(String clientIp) {
+        acquire("resetip", clientIp, passwordResetIpConfig, ErrorCode.RATE_LIMITED,
+                "Too many password reset requests, please try again later", 3600);
+    }
+
+    /** Consumes one password-reset request slot for the target account. */
+    public void checkPasswordResetAccount(String email) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        acquire("resetacct", email.trim().toLowerCase(Locale.ROOT), passwordResetAccountConfig,
+                ErrorCode.RATE_LIMITED, "Too many password reset requests, please try again later", 3600);
     }
 
     /** Consumes one upload slot for this user; 429 when exhausted. */
@@ -98,7 +143,7 @@ public class RateLimitService {
         }
     }
 
-    /** Bounds memory when the login limiter sees many distinct client IPs. */
+    /** Bounds memory when the pre-auth limiters see many distinct client IPs. */
     private void sweep(long now) {
         long maxIdle = MAX_IDLE.toNanos();
         limiters.entrySet().removeIf(e -> now - e.getValue().lastAccess > maxIdle);

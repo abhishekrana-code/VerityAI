@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiException, type AuthResponse, type User, type CsrfResponse } from '@/lib/api';
-import type { RegisterRequest, LoginRequest, ChangePasswordRequest, UpdateProfileRequest } from '@/types/api';
+import type {
+  RegisterRequest,
+  LoginRequest,
+  ChangePasswordRequest,
+  UpdateProfileRequest,
+  PasswordResetRequest,
+  PasswordResetConfirmRequest,
+} from '@/types/api';
 
 export function useAuth() {
   return useQuery({
@@ -20,13 +27,11 @@ export function useCsrfToken() {
 }
 
 export function useRegister() {
-  const queryClient = useQueryClient();
   return useMutation<AuthResponse, ApiException, RegisterRequest>({
     mutationFn: (data: RegisterRequest) => api.post<AuthResponse>('/auth/register', data),
-    onSuccess: (response) => {
-      queryClient.setQueryData(['auth', 'me'], response);
-      queryClient.invalidateQueries({ queryKey: ['auth'] });
-    },
+    // Registration deliberately does not create a session: the response is
+    // always generic (`authenticated: false`), so there is no auth state to
+    // cache. The user signs in explicitly afterwards.
   });
 }
 
@@ -55,7 +60,7 @@ export function useLogout() {
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: UpdateProfileRequest) => api.patch<User>('/users/me', data),
+    mutationFn: (data: UpdateProfileRequest) => api.patch<User>('/auth/users/me', data),
     onSuccess: (user) => {
       queryClient.setQueryData(['auth', 'me'], (old: AuthResponse | undefined) =>
         old ? { ...old, user } : undefined
@@ -66,6 +71,20 @@ export function useUpdateProfile() {
 
 export function useChangePassword() {
   return useMutation({
-    mutationFn: (data: ChangePasswordRequest) => api.post<void>('/users/me/password', data),
+    mutationFn: (data: ChangePasswordRequest) => api.post<void>('/auth/users/me/password', data),
+  });
+}
+
+export function useRequestPasswordReset() {
+  return useMutation<void, ApiException, PasswordResetRequest>({
+    mutationFn: (data: PasswordResetRequest) =>
+      api.post<void>('/auth/password-reset/request', data),
+  });
+}
+
+export function useConfirmPasswordReset() {
+  return useMutation<void, ApiException, PasswordResetConfirmRequest>({
+    mutationFn: (data: PasswordResetConfirmRequest) =>
+      api.post<void>('/auth/password-reset/confirm', data),
   });
 }

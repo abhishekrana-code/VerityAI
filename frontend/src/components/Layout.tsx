@@ -176,7 +176,7 @@ export function Layout() {
           </div>
         </header>
 
-        <main className="w-full flex-1 overflow-y-auto px-4 py-7 sm:px-6 lg:px-9 lg:py-9">
+        <main id="main-content" tabIndex={-1} className="w-full flex-1 overflow-y-auto px-4 py-7 sm:px-6 lg:px-9 lg:py-9">
           <div className="mx-auto w-full max-w-[1440px]"><Outlet /></div>
         </main>
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-5 py-3 text-[10px] text-muted-foreground sm:px-8">
