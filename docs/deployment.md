@@ -66,7 +66,7 @@ nano .env
 | `UPLOAD_DIR` | `/var/lib/verityai/uploads` | Absolute path outside the web root |
 | `APP_BASE_URL` | `https://verity.yourdomain.com` | Origin used in password-reset emails |
 | `CORS_ALLOWED_ORIGINS` | `https://verity.yourdomain.com` | Explicit allowed origin (credentials enabled; no `*`) |
-| `MAIL_HOST` | e.g. `smtp.gmail.com` | Enables password-reset email; leave empty to disable |
+| `MAIL_HOST` | e.g. `smtp.gmail.com` | Enables password-reset email; leave empty to disable. Aliases: `MAIL_SERVER`, `MAIL_USE_TLS`, `MAIL_DEFAULT_SENDER` |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP credentials | Sender account / app password |
 | `MAIL_FROM` | e.g. `no-reply@yourdomain.com` | From address (defaults to `MAIL_USERNAME`) |
 | `RATE_LIMIT_LOGIN_PER_MINUTE_IP` | e.g. `10` | Tune per your usage |
@@ -332,7 +332,7 @@ cd /opt/verityai && git checkout <previous-tag-or-commit>
 | `403` on POST/DELETE from a custom client | Missing CSRF: fetch `GET /api/v1/auth/csrf`, send the `XSRF-TOKEN` cookie back as `X-XSRF-TOKEN` header |
 | `429 RATE_LIMITED` / `AI_RATE_LIMITED` | Expected when quotas are exhausted; wait `Retry-After` seconds or raise `RATE_LIMIT_*` in `.env` |
 | Chat answers “LLM call failed” | `GROQ_API_KEY` missing/invalid in `.env` (service runs without it) |
-| Password-reset email never arrives | `MAIL_HOST`/credentials unset, or the SMTP provider rejected the sender; reset requests still return `200` by design. Check `journalctl -u verityai` for mail errors |
+| Password-reset email never arrives | `MAIL_HOST`/credentials unset, or the SMTP provider rejected the sender; reset requests still return `200` by design. Gmail needs an App Password (2-Step Verification on), not the account password. Check `journalctl -u verityai` for mail errors |
 | `429 RATE_LIMITED` on registration/reset | The per-IP (and per-account) pre-auth limits are working; wait `Retry-After` or raise the `RATE_LIMIT_*` values |
 | Upload returns `503 QUEUE_FULL` | The bounded document-processing queue is saturated; retry after `Retry-After` (the file is not stored) |
 | Uploads stuck in `PROCESSING`/`FAILED` | Check `journalctl -u verityai`; `UPLOAD_DIR` must exist and be writable by the service user |
