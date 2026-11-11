@@ -124,6 +124,33 @@ class DocumentIntelligenceIntegrationTest {
         return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
     }
 
+    @Test
+    void duplicateDetectionIsScopedToTheOwningUser() throws Exception {
+        String filename = "shared-" + UUID.randomUUID() + ".pdf";
+        byte[] bytes = ("%PDF-1.4 fake content for " + filename).getBytes(StandardCharsets.US_ASCII);
+
+        Cookie owner = register(uniqueEmail());
+        Csrf ownerCsrf = csrf(owner);
+        String ownerDocId = upload(owner, ownerCsrf, filename);
+        assertThat(ownerDocId).isNotBlank();
+
+        // The same user re-uploading identical bytes is still rejected.
+        MockMultipartFile duplicate =
+            new MockMultipartFile("file", filename, "application/pdf", bytes);
+        mockMvc.perform(multipart("/api/v1/documents")
+                .file(duplicate)
+                .cookie(owner, ownerCsrf.cookie())
+                .header("X-XSRF-TOKEN", ownerCsrf.token()))
+            .andExpect(status().isConflict());
+
+        // A different user may own the same bytes; hashes are not a
+        // cross-tenant lock and must not leak another account's document.
+        Cookie other = register(uniqueEmail());
+        Csrf otherCsrf = csrf(other);
+        String otherDocId = upload(other, otherCsrf, filename);
+        assertThat(otherDocId).isNotEqualTo(ownerDocId);
+    }
+
     // ------------------------------------------------------------------
     // List: search filter, sort whitelist
     // ------------------------------------------------------------------

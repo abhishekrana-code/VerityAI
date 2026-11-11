@@ -28,7 +28,7 @@ public interface DocumentRepository extends JpaRepository<Document, UUID>, JpaSp
 
     Optional<Document> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
 
-    Optional<Document> findBySha256AndDeletedAtIsNull(String sha256);
+    Optional<Document> findByUserIdAndSha256AndDeletedAtIsNull(UUID userId, String sha256);
 
     List<Document> findByUserIdAndStatusInAndDeletedAtIsNull(UUID userId, List<Document.DocumentStatus> statuses);
 

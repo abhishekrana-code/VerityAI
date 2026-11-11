@@ -5,6 +5,7 @@ import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.PasswordResetTokenRepository;
 import com.verityai.repository.UserRepository;
+import com.verityai.config.CorsConfig;
 import com.verityai.service.mail.MailService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -26,6 +29,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -50,6 +54,7 @@ public class PasswordResetService {
     private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
     private final ThreadPoolTaskExecutor mailExecutor;
     private final String appBaseUrl;
+    private final List<String> allowedOrigins;
     private final long tokenTtlMinutes;
 
     public PasswordResetService(
@@ -59,7 +64,8 @@ public class PasswordResetService {
             MailService mailService,
             FindByIndexNameSessionRepository<? extends Session> sessionRepository,
             @Qualifier("mailTaskExecutor") ThreadPoolTaskExecutor mailExecutor,
-            @Value("${verityai.app.base-url:http://localhost:5173}") String appBaseUrl,
+            @Value("${verityai.app.base-url:}") String appBaseUrl,
+            @Value("${verityai.cors.allowed-origins:}") String allowedOrigins,
             @Value("${verityai.password-reset.token-ttl-minutes:30}") long tokenTtlMinutes) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
@@ -67,22 +73,34 @@ public class PasswordResetService {
         this.mailService = mailService;
         this.sessionRepository = sessionRepository;
         this.mailExecutor = mailExecutor;
-        this.appBaseUrl = appBaseUrl.endsWith("/")
-            ? appBaseUrl.substring(0, appBaseUrl.length() - 1)
-            : appBaseUrl;
+        this.appBaseUrl = trimTrailingSlash(appBaseUrl);
+        this.allowedOrigins = CorsConfig.parseOrigins(allowedOrigins);
         this.tokenTtlMinutes = tokenTtlMinutes > 0 ? tokenTtlMinutes : 30;
     }
 
     /**
      * Creates and mails a token when the account exists. Unknown emails are
      * silently ignored — the controller returns the same 200 either way.
+     *
+     * @param originHeader  browser {@code Origin}; used only when
+     *                      {@code APP_BASE_URL} is not configured
+     * @param refererHeader browser {@code Referer}; fallback when Origin is absent
      */
     @Transactional
-    public void request(String email) {
+    public void request(String email, String originHeader, String refererHeader) {
         // Do the random-token work unconditionally so the unknown-email path is
         // not measurably cheaper than the known-email path.
         String rawToken = generateToken();
         String tokenHash = sha256Hex(rawToken);
+
+        String baseUrl = resolveBaseUrl(appBaseUrl, allowedOrigins, originHeader, refererHeader);
+        if (baseUrl == null) {
+            // Mailing a link to an origin we do not trust would be worse than
+            // sending nothing: it is exactly how reset-link poisoning works.
+            log.error("Cannot build a password-reset link: set APP_BASE_URL to the public "
+                + "frontend URL, or add the frontend origin to CORS_ALLOWED_ORIGINS");
+            return;
+        }
 
         String normalized = email.trim().toLowerCase(Locale.ROOT);
         userRepository.findByEmailIgnoreCase(normalized)
@@ -96,7 +114,7 @@ public class PasswordResetService {
                 token.setExpiresAt(Instant.now().plus(tokenTtlMinutes, ChronoUnit.MINUTES));
                 tokenRepository.save(token);
 
-                String link = appBaseUrl + "/reset-password?token=" + rawToken;
+                String link = baseUrl + "/reset-password?token=" + rawToken;
                 sendAfterCommit(user.getEmail(), link);
             });
     }
@@ -153,6 +171,74 @@ public class PasswordResetService {
         } catch (Exception e) {
             log.warn("Could not invalidate sessions after password reset for {}", email, e);
         }
+    }
+
+    /**
+     * Picks the base URL used to build the reset link.
+     *
+     * <p>An explicit {@code APP_BASE_URL} always wins: production pins the
+     * public origin so the link is stable regardless of how the API is reached.
+     * When it is unset, the browser's own origin is used — but only if it is in
+     * the CORS allowlist. Deriving it from the request keeps local and LAN
+     * development links reachable (the emailed host is the host the user is
+     * actually browsing), while the allowlist check stops a forged Origin from
+     * pointing a victim's reset email at an attacker-controlled host.
+     *
+     * @return a normalised {@code scheme://host[:port]} or {@code null} when no
+     *         trustworthy origin is available
+     */
+    static String resolveBaseUrl(String configuredBaseUrl,
+                                 List<String> allowedOrigins,
+                                 String originHeader,
+                                 String refererHeader) {
+        if (StringUtils.hasText(configuredBaseUrl)) {
+            return trimTrailingSlash(configuredBaseUrl.trim());
+        }
+
+        String candidate = originOf(originHeader);
+        if (candidate == null) {
+            candidate = originOf(refererHeader);
+        }
+        if (candidate == null) {
+            return null;
+        }
+
+        boolean allowed = allowedOrigins.stream()
+            .map(PasswordResetService::originOf)
+            .anyMatch(candidate::equals);
+        return allowed ? candidate : null;
+    }
+
+    /** Returns {@code scheme://host[:port]} for an absolute http(s) URL, else null. */
+    private static String originOf(String headerValue) {
+        if (!StringUtils.hasText(headerValue)) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(headerValue.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null || uri.getRawUserInfo() != null) {
+                return null;
+            }
+            String normalizedScheme = scheme.toLowerCase(Locale.ROOT);
+            if (!normalizedScheme.equals("http") && !normalizedScheme.equals("https")) {
+                return null;
+            }
+            String origin = normalizedScheme + "://" + uri.getHost().toLowerCase(Locale.ROOT);
+            int port = uri.getPort();
+            int defaultPort = normalizedScheme.equals("https") ? 443 : 80;
+            if (port != -1 && port != defaultPort) {
+                origin += ":" + port;
+            }
+            return origin;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static String trimTrailingSlash(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 
     private static String generateToken() {

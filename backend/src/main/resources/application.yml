@@ -106,8 +106,11 @@ verityai:
     starttls: ${MAIL_STARTTLS:${MAIL_USE_TLS:true}}
     ssl: ${MAIL_SSL:false}
   app:
-    # Public frontend URL used to build password-reset links.
-    base-url: ${APP_BASE_URL:http://localhost:5173}
+    # Public frontend URL used to build password-reset links. Leave empty to
+    # derive it from the requesting browser's Origin (which must appear in
+    # verityai.cors.allowed-origins). Set it explicitly in production so the
+    # link is stable and never depends on request headers.
+    base-url: ${APP_BASE_URL:}
   password-reset:
     token-ttl-minutes: ${PASSWORD_RESET_TOKEN_TTL_MINUTES:30}
   groq:

@@ -72,11 +72,15 @@ public class MailService {
         }
         try {
             MimeMessage message = sender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            // Multipart so clients get a real anchor to click; the plain-text
+            // part keeps the raw URL usable when HTML is disabled or the
+            // client refuses to linkify it.
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(from);
             helper.setTo(to);
             helper.setSubject("Reset your VerityAI password");
-            helper.setText("""
+            String safeLink = escapeHtml(link);
+            String text = """
                 Someone requested a password reset for your VerityAI account.
 
                 Open this link within %d minutes to choose a new password:
@@ -84,11 +88,27 @@ public class MailService {
 
                 If you did not request this, you can ignore this email — your
                 password will not change.
-                """.formatted(ttlMinutes, link), false);
+                """.formatted(ttlMinutes, link);
+            String html = """
+                <p>Someone requested a password reset for your VerityAI account.</p>
+                <p>Open this link within %d minutes to choose a new password:</p>
+                <p><a href="%s">%s</a></p>
+                <p>If you did not request this, you can ignore this email — your
+                password will not change.</p>
+                """.formatted(ttlMinutes, safeLink, safeLink);
+            helper.setText(text, html);
             sender.send(message);
             log.info("Sent password reset email to {}", to);
         } catch (Exception e) {
             log.error("Failed to send password reset email to {}", to, e);
         }
+    }
+
+    private static String escapeHtml(String value) {
+        return value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;");
     }
 }

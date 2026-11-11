@@ -120,7 +120,10 @@ public class DocumentService {
             throw ApiException.internal("Failed to compute file hash");
         }
 
-        var existing = documentRepository.findBySha256AndDeletedAtIsNull(sha256);
+        // Duplicate detection is per user: the same bytes may legitimately be
+        // uploaded by two different accounts, and a global check would both
+        // block the second upload and leak that another tenant owns the file.
+        var existing = documentRepository.findByUserIdAndSha256AndDeletedAtIsNull(userId, sha256);
         if (existing.isPresent()) {
             throw ApiException.conflict("Document already exists");
         }

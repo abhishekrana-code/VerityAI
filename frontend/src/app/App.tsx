@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Layout } from '@/components/Layout';
+import { Toaster } from '@/components/ui/toaster';
 
 // Route-level code splitting keeps the initial bundle small: the landing page
 // does not pay for the research workspace, graph renderer, or settings UI.
@@ -104,11 +105,11 @@ export function App() {
           />
           <Route
             path="/reset-password"
-            element={
-              <PublicRoute>
-                <ResetPasswordPage />
-              </PublicRoute>
-            }
+            // Deliberately not wrapped in PublicRoute: a reset link must work
+            // even when the browser already has a session. Bouncing signed-in
+            // users to /dashboard makes the emailed link appear broken, and the
+            // reset itself signs every session out anyway.
+            element={<ResetPasswordPage />}
           />
           <Route
             path="/dashboard/*"
@@ -133,6 +134,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <Toaster />
     </>
   );
 }

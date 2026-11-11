@@ -46,8 +46,8 @@ public class CorsConfig {
         return bean;
     }
 
-    /** Visible for tests: trims, drops blanks and de-duplicates while keeping order. */
-    static List<String> parseOrigins(String raw) {
+    /** Trims, drops blanks and de-duplicates while keeping order. */
+    public static List<String> parseOrigins(String raw) {
         if (raw == null || raw.isBlank()) {
             return List.of();
         }

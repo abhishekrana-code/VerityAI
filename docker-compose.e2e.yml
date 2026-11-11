@@ -1,0 +1,30 @@
+# Isolated infrastructure for the Playwright end-to-end suite.
+#
+# This is deliberately separate from docker-compose.yml so an E2E run can
+# never touch the developer database (port 5434) or send real email. Data
+# lives in tmpfs and disappears when the container is removed.
+#
+#   docker compose -f docker-compose.e2e.yml up -d --wait
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# frontend/e2e/start-backend.mjs starts this automatically when port 5435 is
+# closed, so `npm run test:e2e` is a single command locally and in CI.
+
+services:
+  postgres-e2e:
+    image: pgvector/pgvector:0.8.7-pg17
+    container_name: verityai-postgres-e2e
+    environment:
+      POSTGRES_DB: verityai_e2e
+      POSTGRES_USER: verityai
+      POSTGRES_PASSWORD: verityai_e2e
+    ports:
+      - "5435:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U verityai -d verityai_e2e"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: "no"

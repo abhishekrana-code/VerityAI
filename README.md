@@ -149,11 +149,16 @@ Changing `POSTGRES_PASSWORD` updates both Docker Compose and the backend unless
 
 ## Testing & CI
 
-- **Backend**: 154 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
+- **Backend**: 166 tests — JUnit 5 + Mockito + Testcontainers (PostgreSQL 17 + pgvector in Docker).
   Run `cd backend && .\mvnw.cmd test` (Docker must be running). See [docs/testing.md](docs/testing.md).
 - **Frontend**: 17 tests — Vitest + jsdom. Run `cd frontend && npm test`.
-- **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend) and lint/typecheck/test/build
-  (frontend) on every push. Testcontainers requires a Docker-capable runner.
+- **E2E**: Playwright + Chromium against an isolated Postgres/backend/Vite/SMTP
+  stack (ports 5435/8081/5174/1025). Run `cd frontend && npm run test:e2e`
+  (Docker must be running). It never touches your dev database or sends real
+  email. See [docs/testing.md](docs/testing.md).
+- **CI**: `.github/workflows/ci.yml` runs `mvnw verify` (backend),
+  lint/typecheck/test/build (frontend), and the Playwright E2E suite on every
+  push. Testcontainers and E2E require a Docker-capable runner.
 
 The Groq LLM is never called from tests (mocked); the ONNX embedding model is
 downloaded once, SHA-256 verified, and cached locally — semantic tests skip

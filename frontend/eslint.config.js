@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'playwright-report/**', 'test-results/**', 'e2e/.tmp/**'] },
   js.configs.recommended,
   ...tseslint.configs['flat/recommended'],
   {
@@ -28,6 +28,13 @@ export default [
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+  {
+    // Playwright specs, launchers and the SMTP sink run in Node, not the browser.
+    files: ['e2e/**/*.{ts,mjs}', 'playwright.config.ts'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ]

@@ -83,8 +83,17 @@ export function useRequestPasswordReset() {
 }
 
 export function useConfirmPasswordReset() {
+  const queryClient = useQueryClient();
   return useMutation<void, ApiException, PasswordResetConfirmRequest>({
     mutationFn: (data: PasswordResetConfirmRequest) =>
       api.post<void>('/auth/password-reset/confirm', data),
+    onSuccess: () => {
+      // The server just invalidated every session for the account. Drop the
+      // cached principal so this tab stops believing it is still signed in.
+      // (Do not clear the whole client: that would also discard this
+      // mutation's success state and hide the confirmation screen.)
+      queryClient.setQueryData(['auth', 'me'], { user: null, authenticated: false });
+      queryClient.invalidateQueries({ queryKey: ['auth'] });
+    },
   });
 }

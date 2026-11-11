@@ -13,6 +13,10 @@ cd backend
 # Frontend
 cd frontend
 npm run typecheck && npm run lint && npm test && npm run build
+
+# Browser E2E (Playwright; starts its own Postgres, backend, Vite and SMTP sink)
+cd frontend
+npm run test:e2e
 ```
 
 Run a single class:
@@ -29,6 +33,7 @@ Run a single class:
 | Repository | Testcontainers (`pgvector/pgvector:0.8.7-pg17`) | Real SQL: FTS (`ts_rank`), vector similarity, generated `tsvector` column |
 | Integration (MVC) | `@SpringBootTest` + `MockMvc` + Testcontainers | Full filter chain: session auth, CSRF, validation, ownership, rate limits |
 | Frontend | Vitest + jsdom | API client, error mapping |
+| Browser E2E | Playwright (Chromium) | Real UI against an isolated backend, Postgres, Vite and SMTP sink |
 
 Every Testcontainers class boots a **fresh** PostgreSQL container with Flyway
 migrations V1-V8 applied, so schema regressions surface immediately.
@@ -56,11 +61,13 @@ migrations V1-V8 applied, so schema regressions surface immediately.
 | Class | Tests | Covers |
 |---|---:|---|
 | `AuthIntegrationTest` | 13 | Register (generic, session-free), login/logout, session-id rotation, single-session policy, profile persistence across password changes, CSRF contract, 401s |
-| `DocumentIntelligenceIntegrationTest` | 18 | List filters/sort whitelist, tags, collections, processing history, summaries lifecycle, bulk delete, file access |
+| `DocumentIntelligenceIntegrationTest` | 19 | List filters/sort whitelist, tags, collections, processing history, summaries lifecycle, bulk delete, file access, per-user duplicate detection (same bytes allowed for another tenant) |
 | `RateLimitIntegrationTest` | 4 | 429 + `Retry-After` at the HTTP layer; fake-PDF magic-byte rejection |
 | `ForwardedHeaderIntegrationTest` | 1 | `X-Forwarded-For` from a trusted loopback peer drives the per-IP limiter |
 | `CorsIntegrationTest` | 2 | Configured origin allowed with credentials; unlisted origin rejected |
 | `PasswordResetIntegrationTest` | 5 | Generic request response, token capture, single-use/expiry, password change, session invalidation |
+| `PasswordResetLinkResolutionTest` | 9 | Reset-link base URL: explicit config wins, browser origin used only when allowlisted, forged origin rejected, non-HTTP schemes rejected, default ports normalised |
+| `PasswordResetLinkOriginIntegrationTest` | 2 | With `APP_BASE_URL` unset, the emailed link follows the requesting `Origin`; an origin outside the allowlist is refused (403) and mints no token |
 | `DocumentChunkRepositoryTest` | 6 | FTS relevance, scoped search, soft-delete/user isolation |
 | `RateLimitServiceTest` | 10 | Per-IP/per-account/per-user buckets, registration/reset buckets, disabled limits |
 | `ChatServiceTest` | 6 | Evidence → answer → citation persistence logic |
@@ -77,7 +84,7 @@ migrations V1-V8 applied, so schema regressions surface immediately.
 | `CorsConfigTest` | 3 | Origin list parsing (trim, blanks, duplicates) and empty configuration |
 | `ProcessingExecutorTest` | 1 | Saturated pool rejects instead of running PDF work on the request thread |
 
-**Total: 154 backend tests.**
+**Total: 166 backend tests.**
 
 ### Notable behaviors the tests pin down
 
@@ -111,16 +118,69 @@ migrations V1-V8 applied, so schema regressions surface immediately.
 | `src/features/knowledge-graph/graphLayout.test.ts` | 5 | Deterministic SVG layout: bounds, stable positions, mention-scaled radii, missing-edge tolerance |
 
 **Total: 17 frontend tests.** Component-level UI flows (context picker,
-verification panel, PDF jumps, graph inspector) are not covered in jsdom. They
-are validated by typecheck/lint/production build plus the API-level live checks
-in `docs/phase-3-verification-report.md`; there is no automated browser E2E
-suite in this repository.
+verification panel, PDF jumps, graph inspector) are not covered in jsdom; the
+critical user journeys below are covered by the browser E2E suite.
+
+## Browser E2E (Playwright)
+
+`frontend/e2e/` runs the real React app in Chromium against a **completely
+isolated** stack. It never touches a developer backend, the development
+database, or a real mail provider.
+
+| Component | Port | Notes |
+|---|---:|---|
+| PostgreSQL (pgvector) | 5435 | `docker-compose.e2e.yml`, tmpfs storage, database `verityai_e2e` |
+| Backend | 8081 | Started by `e2e/start-backend.mjs`; rate limits disabled |
+| Vite | 5174 | `VITE_API_PROXY_TARGET=http://127.0.0.1:8081` |
+| SMTP sink | 1025 | Captures mail; no external delivery |
+| Mailbox API | 1026 | HTTP API used by tests to read captured messages |
+
+Run it:
+
+```bash
+cd frontend
+npm run test:e2e          # headless, starts every dependency
+npm run test:e2e:ui       # interactive UI mode
+npm run test:e2e:install  # install the Chromium binary once
+```
+
+`start-backend.mjs` starts the isolated Postgres container automatically when
+port 5435 is closed, then runs Spring Boot with:
+
+- `EMBEDDINGS_PROVIDER=off` (keyword-only retrieval, no model download),
+- `SUMMARY_ENABLED=false` (no Groq calls),
+- `MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`, STARTTLS/auth disabled,
+- every `RATE_LIMIT_*` set to `0` (unlimited),
+- `UPLOAD_DIR=frontend/e2e/.tmp/uploads`.
+
+Covered journeys:
+
+| Spec | Covers |
+|---|---|
+| `auth.spec.ts` | Protected/public route guards, register → login → logout, session-id rotation + single-session policy (two browser contexts), profile display-name persistence across reloads |
+| `documents.spec.ts` | Real PDF upload through the dropzone, document appears in the list, server-side `%PDF-` gate rejects a disguised non-PDF |
+| `password-reset.spec.ts` | Non-enumerating reset request, captured email → token → new password, old password rejected, new password works; unknown address gets the same response; a signed-in browser can open a reset link without being redirected to the dashboard |
+
+The SMTP sink decodes quoted-printable/base64 and multipart bodies, so the
+reset-link extraction keeps working if the mail format changes.
+
+Troubleshooting:
+
+- **Docker not running** — `start-backend.mjs` exits with a clear message.
+- **Port already in use** — the E2E stack uses 5435/8081/5174/1025/1026;
+  stop stale E2E processes or run `docker compose -f docker-compose.e2e.yml down -v`.
+- **Slow first run** — Maven compiles the backend before Spring Boot starts;
+  the Playwright startup timeout is 10 minutes.
 
 ## CI
 
-`.github/workflows/ci.yml` runs `mvnw verify` (backend, requires a
-Docker-capable runner for Testcontainers) and `lint`/`typecheck`/`test`/`build`
-(frontend) on every push.
+`.github/workflows/ci.yml` runs three jobs on every push and pull request:
+
+1. **Backend** — `mvnw verify` (requires a Docker-capable runner for Testcontainers).
+2. **Frontend** — `lint`, `build` (typecheck + bundle) and unit tests.
+3. **E2E** — starts `docker-compose.e2e.yml`, installs Chromium, and runs the
+   Playwright suite against the isolated stack. On failure it uploads
+   `playwright-report/` and `test-results/` as artifacts.
 
 ## Reporting rules
 

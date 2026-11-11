@@ -170,7 +170,10 @@ public class AuthController {
                                                      HttpServletRequest httpRequest) {
         rateLimitService.checkPasswordReset(clientIp(httpRequest));
         rateLimitService.checkPasswordResetAccount(request.getEmail());
-        passwordResetService.request(request.getEmail());
+        passwordResetService.request(
+            request.getEmail(),
+            httpRequest.getHeader("Origin"),
+            httpRequest.getHeader("Referer"));
         return ResponseEntity.ok().build();
     }
 

@@ -41,6 +41,7 @@ frontend/*.local
 frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
+frontend/e2e/.tmp/
 frontend/.turbo/
 
 # =============================================================================
