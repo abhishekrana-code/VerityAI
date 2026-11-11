@@ -66,7 +66,7 @@ jobs:
         run: npm ci
       - name: Install Chromium
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Run E2E suite
         working-directory: frontend
         env:
