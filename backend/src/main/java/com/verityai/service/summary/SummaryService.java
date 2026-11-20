@@ -3,6 +3,7 @@ package com.verityai.service.summary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.verityai.config.BoundedTaskQueue;
 import com.verityai.entity.Document;
 import com.verityai.entity.DocumentChunk;
 import com.verityai.entity.DocumentSummary;
@@ -10,6 +11,7 @@ import com.verityai.repository.DocumentChunkRepository;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.DocumentSummaryRepository;
 import com.verityai.service.ai.LlmService;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +26,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Generates and persists AI summaries for documents.
@@ -60,12 +60,30 @@ public class SummaryService {
     private final com.verityai.service.knowledge.KnowledgeGraphService knowledgeGraphService;
     private final ObjectMapper objectMapper;
 
-    /** Single worker: summaries are generated serially, one document at a time. */
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "summary-worker");
-        t.setDaemon(true);
-        return t;
-    });
+    /**
+     * Single worker with a bounded queue: summaries are generated serially, and
+     * an upload burst cannot grow the backlog without limit. Work rejected by a
+     * full queue is logged and left PENDING for the startup backfill or an
+     * explicit regenerate.
+     */
+    private BoundedTaskQueue queue;
+
+    /**
+     * User-visible explanation stored while a dropped summary waits for the
+     * startup backfill. It is cleared as soon as a real run marks the document
+     * PENDING.
+     */
+    static final String DEFERRED_MESSAGE =
+        "Summary generation was deferred because the background queue is full. "
+            + "It will retry automatically on the next server start.";
+
+    @Value("${verityai.summary.queue-capacity:100}")
+    private int queueCapacity;
+
+    @PostConstruct
+    void initQueue() {
+        this.queue = new BoundedTaskQueue("Summary", "summary-worker", queueCapacity);
+    }
 
     @Value("${verityai.summary.enabled:true}")
     private boolean enabled;
@@ -108,25 +126,62 @@ public class SummaryService {
 
     @PreDestroy
     void shutdown() {
-        executor.shutdownNow();
+        if (queue != null) {
+            queue.shutdown();
+        }
     }
 
     /**
-     * Queues summary generation for a document (no-op when disabled or the
-     * document is gone). Safe to call from async processing threads.
+     * Queues summary generation for a document. Safe to call from async
+     * processing threads.
+     *
+     * @return false when summaries are disabled or the bounded queue was full;
+     *         a rejected document stays PENDING (or NONE) for the startup
+     *         backfill or an explicit regenerate
      */
-    public void schedule(UUID documentId) {
+    public boolean schedule(UUID documentId) {
         if (!enabled) {
-            return;
+            return false;
         }
-        executor.submit(() -> {
+        if (queue == null) {
+            initQueue();
+        }
+        boolean accepted = queue.submit(() -> {
             try {
                 generate(documentId);
             } catch (Exception e) {
                 log.error("Summary generation failed for document {}", documentId, e);
                 markFailed(documentId, "Summary generation failed: " + safeMessage(e));
             }
-        });
+        }, documentId);
+        if (!accepted) {
+            markDeferred(documentId);
+        }
+        return accepted;
+    }
+
+    /**
+     * A dropped job must not look finished. PENDING is the state the startup
+     * backfill scans for ({@code findDocumentsPendingSummary} includes NONE,
+     * PENDING and FAILED), so the summary is retried on the next start or an
+     * explicit regenerate. A document whose summary is already READY is left
+     * alone.
+     */
+    private void markDeferred(UUID documentId) {
+        try {
+            documentRepository.findById(documentId).ifPresent(doc -> {
+                if (doc.getSummaryStatus() != Document.SummaryStatus.READY) {
+                    doc.setSummaryStatus(Document.SummaryStatus.PENDING);
+                    // Visible reason, not just a silent PENDING: the API returns
+                    // summaryError and the document/report pages show it.
+                    doc.setSummaryError(DEFERRED_MESSAGE);
+                    documentRepository.save(doc);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Could not mark summary for document {} as pending after a dropped job",
+                documentId, e);
+        }
     }
 
     /**
@@ -187,8 +242,16 @@ public class SummaryService {
                 ? pending.subList(0, backfillLimit) : pending;
             log.info("Queuing {} document summary job(s) at startup ({} total pending)",
                 batch.size(), pending.size());
+            int queued = 0;
             for (UUID id : batch) {
-                schedule(id);
+                if (schedule(id)) {
+                    queued++;
+                }
+            }
+            if (queued < batch.size()) {
+                log.warn("Only {} of {} summary job(s) were queued at startup; "
+                    + "the rest stay pending for the next start",
+                    queued, batch.size());
             }
         } catch (Exception e) {
             log.warn("Summary backfill skipped: {}", e.getMessage());
