@@ -152,6 +152,9 @@ verityai:
     enabled: ${KNOWLEDGE_GRAPH_ENABLED:true}
     # Cap on documents rebuilt at startup / per explicit rebuild request
     backfill-limit: ${KNOWLEDGE_GRAPH_BACKFILL_LIMIT:20}
+    # Bounded queue of asynchronous graph rebuilds; work beyond this is dropped
+    # (logged) and retried at the next startup or explicit rebuild
+    queue-capacity: ${KNOWLEDGE_GRAPH_QUEUE_CAPACITY:100}
     rebuild-max-documents: ${KNOWLEDGE_GRAPH_REBUILD_MAX_DOCUMENTS:10}
     # Bounds on the graph read model returned by the API
     max-nodes: ${KNOWLEDGE_GRAPH_MAX_NODES:300}
@@ -187,6 +190,9 @@ verityai:
     segment-max-tokens: ${SUMMARY_SEGMENT_MAX_TOKENS:8000}
     # Cap on automatic backfill jobs per application start
     backfill-limit: ${SUMMARY_BACKFILL_LIMIT:20}
+    # Bounded queue of queued summaries; work beyond this is dropped (logged)
+    # and retried at the next startup or an explicit regenerate
+    queue-capacity: ${SUMMARY_QUEUE_CAPACITY:100}
   embeddings:
     # onnx = local model (no external API); off = keyword search only
     provider: ${EMBEDDINGS_PROVIDER:onnx}
