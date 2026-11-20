@@ -229,9 +229,16 @@ function ReportCard({ report }: { report: ReportItem }) {
       )}
 
       {report.summaryStatus === 'PENDING' && (
-        <p className="mt-3 inline-flex items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-200">
+        <p
+          className={cn(
+            'mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs',
+            report.summaryError
+              ? 'border-amber-400/25 bg-amber-500/10 text-amber-200'
+              : 'border-indigo-400/20 bg-indigo-500/5 text-indigo-200'
+          )}
+        >
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          Summaries are being generated. This page will show them once ready.
+          {report.summaryError ?? 'Summaries are being generated. This page will show them once ready.'}
         </p>
       )}
 

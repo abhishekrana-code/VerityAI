@@ -12,7 +12,7 @@ import {
   type KnowledgeGraphResponse,
 } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
-import { cn } from '@/lib/utils';
+import { cn, isDeferredStatus } from '@/lib/utils';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
 import { PageEmpty, PageError, PageLoading, StatCard } from '@/components/ui/PageStates';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
@@ -96,6 +96,11 @@ export function KnowledgeGraphPage() {
   });
 
   const graph = graphQuery.data;
+  // PENDING with an error is a deferred rebuild, which the user may retry.
+  // PENDING without one is genuine work in progress, so rebuilding again would
+  // only queue a duplicate and must stay disabled.
+  const graphDeferred = isDeferredStatus(graph?.status, graph?.error);
+  const rebuildBlocked = rebuild.isPending || (graph?.status === 'PENDING' && !graphDeferred);
   const layout = useMemo(
     () => layoutGraph(graph?.nodes ?? [], graph?.edges ?? [], { width: GRAPH_WIDTH, height: GRAPH_HEIGHT }),
     [graph],
@@ -141,10 +146,11 @@ export function KnowledgeGraphPage() {
           </div>
           <button
             onClick={() => rebuild.mutate()}
-            disabled={rebuild.isPending}
+            disabled={rebuildBlocked}
+            title={graphDeferred ? 'The last rebuild was deferred — retry it now' : undefined}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card/80 px-4 py-2.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"
           >
-            {rebuild.isPending
+            {rebuildBlocked
               ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
             Rebuild {documentId ? 'this graph' : 'graphs'}
@@ -243,7 +249,27 @@ export function KnowledgeGraphPage() {
           </section>
 
           {graph.status === 'PENDING' ? (
-            <PageLoading label="The graph is being built…" />
+            graph.error ? (
+              <PageEmpty
+                icon={Network}
+                title="Graph rebuild deferred"
+                description={graph.error}
+                action={
+                  <button
+                    onClick={() => rebuild.mutate()}
+                    disabled={rebuild.isPending}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {rebuild.isPending
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <RefreshCw className="h-4 w-4" />}
+                    Retry rebuild
+                  </button>
+                }
+              />
+            ) : (
+              <PageLoading label="The graph is being built…" />
+            )
           ) : graph.nodes.length === 0 ? (
             <PageEmpty
               icon={Network}

@@ -17,7 +17,7 @@ import {
   ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle,
   Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isDeferredStatus } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -60,7 +60,10 @@ export function DocumentDetailPage() {
     queryKey: ['document-summaries', id],
     queryFn: () => api.get<DocumentSummariesResponse>(`/documents/${id}/summaries`),
     enabled: !!id && doc?.status === 'READY',
-    refetchInterval: (query) => query.state.data?.summaryStatus === 'PENDING' ? 2000 : false,
+    // A deferred summary (PENDING with a reason) will not progress until the
+    // next server start, so stop polling once that signal is present.
+    refetchInterval: (query) =>
+      query.state.data?.summaryStatus === 'PENDING' && !query.state.data?.summaryError ? 2000 : false,
   });
 
   const retryMutation = useMutation({
@@ -260,13 +263,21 @@ function SummaryTab({
   }
 
   const status = summaries?.summaryStatus ?? 'NONE';
+  // PENDING without a reason is real work in progress. PENDING *with* a reason
+  // is a deferred job that will not move until the next start, so the user must
+  // be able to retry it now.
+  const deferred = isDeferredStatus(status, summaries?.summaryError);
+  // Disabled only while a run is genuinely in flight; a deferred job is idle
+  // until the next start, so retrying it is the point of the button.
+  const retryBlocked = isRegenerating || (status === 'PENDING' && !deferred);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Sparkles className="h-4 w-4 text-primary" />
-          {status === 'PENDING' && 'Generating summary…'}
+          {status === 'PENDING' &&
+            (summaries?.summaryError ? 'Summary deferred' : 'Generating summary…')}
           {status === 'READY' && summaries?.summaries.length
             ? `Generated ${formatDistanceToNow(new Date(summaries.summaries[0].generatedAt), { addSuffix: true })}`
             : null}
@@ -275,13 +286,13 @@ function SummaryTab({
         </div>
         <button
           onClick={onRegenerate}
-          disabled={isRegenerating || status === 'PENDING'}
+          disabled={retryBlocked}
           className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
         >
-          {(isRegenerating || status === 'PENDING')
+          {retryBlocked
             ? <Loader2 className="h-4 w-4 animate-spin" />
             : <RefreshCw className="h-4 w-4" />}
-          {status === 'NONE' ? 'Generate summary' : 'Regenerate'}
+          {deferred ? 'Retry summary' : status === 'NONE' ? 'Generate summary' : 'Regenerate'}
         </button>
       </div>
 
@@ -294,7 +305,16 @@ function SummaryTab({
         </div>
       )}
 
-      {status === 'PENDING' && (
+      {status === 'PENDING' && summaries?.summaryError && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
+            <Clock className="h-4 w-4" /> Summary deferred — it will retry automatically
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">{summaries.summaryError}</p>
+        </div>
+      )}
+
+      {status === 'PENDING' && !summaries?.summaryError && (
         <div className="rounded-xl border p-6 space-y-3" aria-live="polite">
           <div className="flex items-center gap-2 text-sm">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
