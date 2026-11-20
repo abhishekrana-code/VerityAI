@@ -1,6 +1,7 @@
 package com.verityai.service.knowledge;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.verityai.config.BoundedTaskQueue;
 import com.verityai.dto.response.KnowledgeGraphRebuildResponse;
 import com.verityai.dto.response.KnowledgeGraphResponse;
 import com.verityai.entity.Document;
@@ -17,6 +18,7 @@ import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.DocumentSummaryRepository;
 import com.verityai.repository.KnowledgeEntityRepository;
 import com.verityai.repository.KnowledgeRelationRepository;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -42,8 +44,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -67,11 +67,28 @@ public class KnowledgeGraphService {
     private final KnowledgeRelationRepository relationRepository;
     private final TransactionTemplate transactionTemplate;
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "knowledge-graph-worker");
-        t.setDaemon(true);
-        return t;
-    });
+    /**
+     * Single worker with a bounded queue for asynchronous rebuilds. Startup
+     * backfill is the only producer; rejected work is logged and the document's
+     * knowledge status stays pending for the next start or an explicit rebuild.
+     */
+    private BoundedTaskQueue queue;
+
+    /**
+     * User-visible explanation stored while a dropped rebuild waits for the
+     * startup backfill. It is cleared as soon as a real rebuild starts.
+     */
+    static final String DEFERRED_MESSAGE =
+        "Knowledge graph rebuild was deferred because the background queue is full. "
+            + "It will retry automatically on the next server start.";
+
+    @Value("${verityai.knowledge.queue-capacity:100}")
+    private int queueCapacity;
+
+    @PostConstruct
+    void initQueue() {
+        this.queue = new BoundedTaskQueue("Knowledge graph", "knowledge-graph-worker", queueCapacity);
+    }
 
     @Value("${verityai.knowledge.enabled:true}")
     private boolean enabled;
@@ -90,7 +107,9 @@ public class KnowledgeGraphService {
 
     @PreDestroy
     void shutdown() {
-        executor.shutdownNow();
+        if (queue != null) {
+            queue.shutdown();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -223,6 +242,28 @@ public class KnowledgeGraphService {
             .orElse(List.of());
     }
 
+    /**
+     * A dropped rebuild must stay eligible for the startup backfill, which scans
+     * NONE, PENDING and FAILED. PENDING records that the graph is still owed; a
+     * READY graph is never downgraded.
+     */
+    private void markDeferred(UUID documentId) {
+        try {
+            documentRepository.findById(documentId).ifPresent(document -> {
+                if (document.getKnowledgeStatus() != Document.KnowledgeStatus.READY) {
+                    document.setKnowledgeStatus(Document.KnowledgeStatus.PENDING);
+                    // Visible reason, not just a silent PENDING: the graph API
+                    // returns this as `error` and the graph page shows it.
+                    document.setKnowledgeError(DEFERRED_MESSAGE);
+                    documentRepository.save(document);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Could not mark knowledge graph for document {} as pending after a dropped job",
+                documentId, e);
+        }
+    }
+
     private void markFailed(UUID documentId, Exception error) {
         try {
             transactionTemplate.executeWithoutResult(status ->
@@ -310,8 +351,18 @@ public class KnowledgeGraphService {
                 ? pending.subList(0, backfillLimit) : pending;
             log.info("Queuing {} knowledge-graph job(s) at startup ({} total pending)",
                 batch.size(), pending.size());
+            int queued = 0;
             for (UUID id : batch) {
-                executor.submit(() -> rebuild(id));
+                if (queue.submit(() -> rebuild(id), id)) {
+                    queued++;
+                } else {
+                    markDeferred(id);
+                }
+            }
+            if (queued < batch.size()) {
+                log.warn("Only {} of {} knowledge-graph job(s) were queued at startup; "
+                    + "the rest stay pending for the next start",
+                    queued, batch.size());
             }
         } catch (Exception e) {
             log.warn("Knowledge-graph backfill skipped: {}", e.getMessage());
