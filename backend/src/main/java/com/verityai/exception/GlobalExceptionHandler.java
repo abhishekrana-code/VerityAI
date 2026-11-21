@@ -11,6 +11,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -53,6 +54,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleNotReadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
         ApiError error = ApiError.of(400, ErrorCode.VALIDATION_ERROR, "Malformed request body", request.getRequestURI(), getRequestId());
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        // A malformed UUID (or other typed value) in a path or query parameter is a
+        // client error; without this it falls through to the generic 500 handler.
+        ApiError error = ApiError.of(400, ErrorCode.VALIDATION_ERROR,
+            "Invalid value for '" + ex.getName() + "'",
+            request.getRequestURI(), getRequestId());
         return ResponseEntity.badRequest().body(error);
     }
 
