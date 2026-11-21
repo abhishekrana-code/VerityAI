@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, type ReportItem, type ReportListResponse } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { cn, isDeferredStatus } from '@/lib/utils';
 import {
   PageEmpty,
   PageError,
@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowUpRight,
   CalendarClock,
+  Clock,
   FileBarChart,
   FileText,
   Lightbulb,
@@ -182,7 +183,12 @@ export function ReportsPage() {
 }
 
 function ReportCard({ report }: { report: ReportItem }) {
-  const statusClass = STATUS_STYLES[report.summaryStatus] ?? STATUS_STYLES.NONE;
+  // PENDING with a reason is deferred, not running: it will not advance until
+  // the next backend start, so it must not be labelled or animated as progress.
+  const deferred = isDeferredStatus(report.summaryStatus, report.summaryError);
+  const statusClass = deferred
+    ? 'border-amber-400/25 bg-amber-500/10 text-amber-300'
+    : STATUS_STYLES[report.summaryStatus] ?? STATUS_STYLES.NONE;
 
   return (
     <li className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm transition hover:border-indigo-400/25">
@@ -199,11 +205,13 @@ function ReportCard({ report }: { report: ReportItem }) {
             <span className={cn('inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-semibold', statusClass)}>
               {report.summaryStatus === 'READY'
                 ? 'Ready'
-                : report.summaryStatus === 'PENDING'
-                  ? 'Generating'
-                  : report.summaryStatus === 'FAILED'
-                    ? 'Failed'
-                    : 'Not generated'}
+                : deferred
+                  ? 'Deferred'
+                  : report.summaryStatus === 'PENDING'
+                    ? 'Generating'
+                    : report.summaryStatus === 'FAILED'
+                      ? 'Failed'
+                      : 'Not generated'}
             </span>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
@@ -228,19 +236,17 @@ function ReportCard({ report }: { report: ReportItem }) {
         </p>
       )}
 
-      {report.summaryStatus === 'PENDING' && (
-        <p
-          className={cn(
-            'mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs',
-            report.summaryError
-              ? 'border-amber-400/25 bg-amber-500/10 text-amber-200'
-              : 'border-indigo-400/20 bg-indigo-500/5 text-indigo-200'
-          )}
-        >
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          {report.summaryError ?? 'Summaries are being generated. This page will show them once ready.'}
+      {deferred ? (
+        <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Clock className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />
+          {report.summaryError}
         </p>
-      )}
+      ) : report.summaryStatus === 'PENDING' ? (
+        <p className="mt-3 inline-flex items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-200">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          Summaries are being generated. This page will show them once ready.
+        </p>
+      ) : null}
 
       {report.executiveSummary ? (
         <div className="mt-4 rounded-xl border border-border/60 bg-background/40 p-4">

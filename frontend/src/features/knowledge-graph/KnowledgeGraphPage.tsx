@@ -257,10 +257,10 @@ export function KnowledgeGraphPage() {
                 action={
                   <button
                     onClick={() => rebuild.mutate()}
-                    disabled={rebuild.isPending}
+                    disabled={rebuildBlocked}
                     className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
-                    {rebuild.isPending
+                    {rebuildBlocked
                       ? <Loader2 className="h-4 w-4 animate-spin" />
                       : <RefreshCw className="h-4 w-4" />}
                     Retry rebuild
@@ -284,16 +284,25 @@ export function KnowledgeGraphPage() {
               action={
                 <button
                   onClick={() => rebuild.mutate()}
-                  disabled={rebuild.isPending}
+                  disabled={rebuildBlocked}
                   className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
-                  {rebuild.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {rebuildBlocked ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   Build graph
                 </button>
               }
             />
           ) : (
             <>
+              {/* The backend keeps the last successful graph when a rebuild fails,
+                  so FAILED can still have nodes: say so instead of showing it as healthy. */}
+              {graph.status === 'FAILED' && (
+                <p className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive">
+                  <strong>Rebuild failed.</strong>
+                  {graph.error ? ` ${graph.error}` : ''} Showing the last successful graph — rebuild to try again.
+                </p>
+              )}
+
               {graph.truncated && (
                 <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
                   Showing the {graph.returnedEntities} most-mentioned entities. Narrow the document

@@ -263,21 +263,18 @@ function SummaryTab({
   }
 
   const status = summaries?.summaryStatus ?? 'NONE';
-  // PENDING without a reason is real work in progress. PENDING *with* a reason
-  // is a deferred job that will not move until the next start, so the user must
-  // be able to retry it now.
+  // PENDING with a reason is a deferred job: idle until the next start, so it
+  // must be retryable now. PENDING without one is a run genuinely in flight.
   const deferred = isDeferredStatus(status, summaries?.summaryError);
-  // Disabled only while a run is genuinely in flight; a deferred job is idle
-  // until the next start, so retrying it is the point of the button.
-  const retryBlocked = isRegenerating || (status === 'PENDING' && !deferred);
+  const generating = status === 'PENDING' && !deferred;
+  const retryBlocked = isRegenerating || generating;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Sparkles className="h-4 w-4 text-primary" />
-          {status === 'PENDING' &&
-            (summaries?.summaryError ? 'Summary deferred' : 'Generating summary…')}
+          {status === 'PENDING' && (deferred ? 'Summary deferred' : 'Generating summary…')}
           {status === 'READY' && summaries?.summaries.length
             ? `Generated ${formatDistanceToNow(new Date(summaries.summaries[0].generatedAt), { addSuffix: true })}`
             : null}
@@ -305,7 +302,7 @@ function SummaryTab({
         </div>
       )}
 
-      {status === 'PENDING' && summaries?.summaryError && (
+      {deferred && (
         <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
             <Clock className="h-4 w-4" /> Summary deferred — it will retry automatically
@@ -314,7 +311,7 @@ function SummaryTab({
         </div>
       )}
 
-      {status === 'PENDING' && !summaries?.summaryError && (
+      {generating && (
         <div className="rounded-xl border p-6 space-y-3" aria-live="polite">
           <div className="flex items-center gap-2 text-sm">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
