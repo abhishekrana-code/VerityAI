@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -331,6 +332,36 @@ class ConversationRagIntegrationTest {
             .andExpect(status().isForbidden());
 
         assertThat(ownerSession).isNotNull();
+    }
+
+    @Test
+    void chatFailurePersistsTheFailedAssistantMessage() throws Exception {
+        String email = uniqueEmail();
+        Cookie session = register(email);
+        Csrf csrf = csrf(session);
+
+        Conversation conv = conversation(session, csrf, "Provider outage", null);
+
+        when(llmService.generate(any(LlmService.ChatRequest.class)))
+            .thenThrow(new RuntimeException("provider down"));
+
+        mockMvc.perform(post("/api/v1/conversations/" + conv.getId() + "/messages")
+                .cookie(session, csrf.cookie())
+                .header("X-XSRF-TOKEN", csrf.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"question\":\"What does the report say?\"}"))
+            .andExpect(status().isInternalServerError());
+
+        // The FAILED record must survive the error. Rolling it back with the
+        // exception would leave the user with no trace of the attempt.
+        List<Message> messages = messageRepository
+            .findByConversationIdOrderByCreatedAtAsc(conv.getId(), PageRequest.of(0, 10))
+            .getContent();
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0).getRole()).isEqualTo(Message.MessageRole.USER);
+        assertThat(messages.get(1).getRole()).isEqualTo(Message.MessageRole.ASSISTANT);
+        assertThat(messages.get(1).getStatus()).isEqualTo(Message.MessageStatus.FAILED);
+        assertThat(messages.get(1).getContent()).startsWith("Error generating answer");
     }
 
     // ==================================================================

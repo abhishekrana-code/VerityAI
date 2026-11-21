@@ -137,26 +137,62 @@ public class DocumentService {
             throw ApiException.internal("Failed to store file");
         }
 
-        Document document = new Document();
-        document.setUser(new User());
-        document.getUser().setId(userId);
-        document.setOriginalFilename(file.getOriginalFilename());
-        document.setStoredFilename(storedFilename);
-        // We verified the %PDF- signature, so store the detected type rather
-        // than trusting the browser-supplied Content-Type.
-        document.setMimeType("application/pdf");
-        document.setSizeBytes(file.getSize());
-        document.setSha256(sha256);
-        document.setStatus(Document.DocumentStatus.UPLOADED);
+        // The binary is on disk before the row exists. Persisting the document,
+        // recording its event or committing the transaction can still fail, so
+        // tie the file to the transaction: it is removed unless that transaction
+        // commits, and a failed upload never leaves a stray PDF behind.
+        deleteFileOnRollback(filePath);
 
-        document = documentRepository.save(document);
-        processingEventService.recordUploaded(document.getId());
+        try {
+            Document document = new Document();
+            document.setUser(new User());
+            document.getUser().setId(userId);
+            document.setOriginalFilename(file.getOriginalFilename());
+            document.setStoredFilename(storedFilename);
+            // We verified the %PDF- signature, so store the detected type rather
+            // than trusting the browser-supplied Content-Type.
+            document.setMimeType("application/pdf");
+            document.setSizeBytes(file.getSize());
+            document.setSha256(sha256);
+            document.setStatus(Document.DocumentStatus.UPLOADED);
 
-        // Process asynchronously after the transaction commits
-        Document savedDocument = document;
-        runAfterCommit(savedDocument.getId(), () -> processDocument(savedDocument.getId(), filePath));
+            document = documentRepository.save(document);
+            processingEventService.recordUploaded(document.getId());
 
-        return document;
+            // Process asynchronously after the transaction commits
+            Document savedDocument = document;
+            runAfterCommit(savedDocument.getId(), () -> processDocument(savedDocument.getId(), filePath));
+
+            return document;
+        } catch (RuntimeException e) {
+            // Covers callers without an active transaction, where afterCompletion
+            // never runs; deleteIfExists makes a second cleanup harmless.
+            deleteFileQuietly(filePath);
+            throw e;
+        }
+    }
+
+    /** Deletes the stored upload unless the current transaction commits. */
+    private void deleteFileOnRollback(Path filePath) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                    deleteFileQuietly(filePath);
+                }
+            }
+        });
+    }
+
+    private void deleteFileQuietly(Path filePath) {
+        try {
+            Files.deleteIfExists(filePath);
+        } catch (IOException e) {
+            log.warn("Failed to delete stored upload file {}", filePath, e);
+        }
     }
 
     private void runAfterCommit(UUID documentId, Runnable task) {

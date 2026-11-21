@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -175,6 +176,32 @@ class ChatServiceTest {
         verify(messageRepository, never()).save(any());
         verify(llmService, never()).generate(any());
         verify(conversationRepository, never()).touch(any(), any());
+    }
+
+    @Test
+    void ask_commitsOnlyTheLlmFailurePath() throws NoSuchMethodException {
+        Transactional tx = ChatService.class
+            .getMethod("ask", Conversation.class, String.class, List.class)
+            .getAnnotation(Transactional.class);
+
+        assertThat(tx).isNotNull();
+        // Only the post-write LLM failure may commit; validation/ownership must
+        // keep the default rollback.
+        assertThat(tx.noRollbackFor()).containsExactly(ChatService.LlmGenerationException.class);
+    }
+
+    @Test
+    void ask_withMissingDocument_throwsNotFoundBeforeSavingAnything() {
+        UUID missing = UUID.randomUUID();
+        when(documentRepository.findAllById(List.of(missing))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> chatService.ask(conversation, QUESTION, List.of(missing)))
+            .isInstanceOf(ApiException.class)
+            .satisfies(ex -> assertThat(((ApiException) ex).getStatus()).isEqualTo(404));
+
+        verify(messageRepository, never()).save(any());
+        verify(retrievalService, never()).retrieve(any(), any(), any());
+        verify(llmService, never()).generate(any());
     }
 
     @Test

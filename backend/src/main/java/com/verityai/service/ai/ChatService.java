@@ -7,6 +7,7 @@ import com.verityai.entity.Message;
 import com.verityai.entity.MessageCitation;
 import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
+import com.verityai.exception.ErrorCode;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.ConversationRepository;
 import com.verityai.repository.MessageCitationRepository;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -42,23 +44,38 @@ public class ChatService {
     @Value("${verityai.groq.max-tokens:4096}")
     private int maxTokens;
 
-    @Transactional
+    /**
+     * One transaction so the lazy document context and every write commit
+     * together. Only a post-write LLM failure is exempt from rollback: the
+     * FAILED assistant message is saved before {@link LlmGenerationException} is
+     * thrown, so that record must commit. Validation and ownership exceptions
+     * keep the default rollback behaviour.
+     */
+    @Transactional(noRollbackFor = LlmGenerationException.class)
     public MessageResponse ask(Conversation conversation, String question, List<UUID> requestedDocIds) {
         UUID userId = conversation.getUser().getId();
 
-        // Determine document scope
+        // Determine document scope. Explicit ids come from the caller and must
+        // all exist; the conversation's own join rows are trusted.
         List<UUID> docIds;
-        if (requestedDocIds != null && !requestedDocIds.isEmpty()) {
-            docIds = requestedDocIds;
+        boolean explicitScope = requestedDocIds != null && !requestedDocIds.isEmpty();
+        if (explicitScope) {
+            docIds = requestedDocIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
         } else {
             docIds = conversation.getDocuments().stream()
                 .map(cd -> cd.getDocument().getId())
                 .collect(Collectors.toList());
         }
 
-        // Verify ownership
+        // Verify every requested document exists and belongs to the caller.
         if (!docIds.isEmpty()) {
             List<Document> docs = documentRepository.findAllById(docIds);
+            if (explicitScope && docs.size() != docIds.size()) {
+                throw ApiException.notFound("One or more documents were not found");
+            }
             for (Document doc : docs) {
                 if (!doc.getUser().getId().equals(userId)) {
                     throw ApiException.forbidden("Document access denied");
@@ -97,7 +114,7 @@ public class ChatService {
             errorMessage.setStatus(Message.MessageStatus.FAILED);
             errorMessage.setModel(model);
             messageRepository.save(errorMessage);
-            throw ApiException.internal("Failed to generate answer");
+            throw new LlmGenerationException("Failed to generate answer");
         }
 
         // Determine evidence status
@@ -177,5 +194,17 @@ public class ChatService {
         }
 
         return resp;
+    }
+
+    /**
+     * Signals an LLM failure that occurred after the user message and the FAILED
+     * assistant message were persisted. This is the only exception type the
+     * transaction commits for; every other {@link ApiException} (validation,
+     * ownership, conflict) still rolls back.
+     */
+    static final class LlmGenerationException extends ApiException {
+        LlmGenerationException(String message) {
+            super(ErrorCode.INTERNAL_ERROR, message, 500);
+        }
     }
 }
