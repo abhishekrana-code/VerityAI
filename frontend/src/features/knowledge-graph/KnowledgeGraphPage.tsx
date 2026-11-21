@@ -298,8 +298,9 @@ export function KnowledgeGraphPage() {
                   so FAILED can still have nodes: say so instead of showing it as healthy. */}
               {graph.status === 'FAILED' && (
                 <p className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive">
-                  <strong>Rebuild failed.</strong>
-                  {graph.error ? ` ${graph.error}` : ''} Showing the last successful graph — rebuild to try again.
+                  <strong>Rebuild failed.</strong>{' '}
+                  {graph.error ? `${graph.error.replace(/\.?$/, '.')} ` : ''}
+                  Showing the last successful graph — rebuild to try again.
                 </p>
               )}
 
