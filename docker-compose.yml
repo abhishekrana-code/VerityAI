@@ -17,7 +17,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-verityai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-verityai_dev}
     ports:
-      - "5434:5432"
+      # Loopback only: nothing outside the host needs the database.
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,7 +37,8 @@ services:
       postgres:
         condition: service_healthy
     # Everything in .env that is deploy-specific (GROQ_API_KEY, MAIL_*, rate
-    # limits, …) applies here. Missing file is fine: defaults take over.
+    # limits, …) applies here; `environment` below wins for container-only
+    # settings. A missing file is fine (requires Compose >= 2.24).
     env_file:
       - path: .env
         required: false
@@ -59,17 +61,19 @@ services:
       UPLOAD_DIR: /var/lib/verityai/uploads
       EMBEDDINGS_CACHE_DIR: /var/lib/verityai/models
       EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-onnx}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      APP_BASE_URL: ${APP_BASE_URL:-}
     volumes:
+      # pre-existing volumes are chowned by docker-entrypoint.sh before the
+      # process drops root, so host-side ownership never breaks startup
       - uploads:/var/lib/verityai/uploads
       - embeddings:/var/lib/verityai/models
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "http://localhost:8080/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 60s
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   frontend:
@@ -83,10 +87,12 @@ services:
     ports:
       - "${APP_PORT:-8080}:80"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      test: ["CMD", "wget", "-q", "-T", "3", "--spider", "http://127.0.0.1/"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 6
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:

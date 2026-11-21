@@ -16,11 +16,96 @@ VerityAI is a full-stack AI research platform that lets users upload PDFs and as
 | Backend | Java 21, Spring Boot 3.5, Maven Wrapper, Spring Security (Session + CSRF), Spring Data JPA, Flyway |
 | Database | PostgreSQL 17 (Docker), full-text search |
 | AI | Groq API (OpenAI-compatible), Java `HttpClient` + Jackson |
-| Deployment | Docker Compose (Postgres), nginx reverse proxy, Cloudflare Tunnel — see [docs/deployment.md](docs/deployment.md) |
+| Deployment | Docker Compose (Postgres, backend, nginx-served SPA), optional host nginx/systemd, Cloudflare Tunnel — see [docs/deployment.md](docs/deployment.md) |
 
 ---
 
-## Quick Start (Windows)
+## Quick Start (Docker — recommended)
+
+Everything — Postgres 17 + pgvector, the Spring Boot API and the nginx-served
+React SPA — runs from one compose file:
+
+```bash
+git clone <your-repo-url> VerityAI
+cd VerityAI
+cp .env.example .env          # Windows PowerShell: copy .env.example .env
+# edit .env: at minimum set GROQ_API_KEY
+docker compose up -d --build
+```
+
+Open **http://localhost:8080**, register an account, upload a PDF and wait for
+`READY`. The first build takes a few minutes (Maven/npm fetch inside the
+images); later starts take seconds.
+
+### Ports
+
+| Port | Service | Notes |
+|---|---|---|
+| 8080 | nginx: SPA + `/api` | The only entry point; `/api/v1/*` is proxied to the backend |
+| 5434 | PostgreSQL | Bound to `127.0.0.1` only, for `psql`/Flyway from the host |
+| 8080 (container) | Spring Boot | Not published on the host; reach it through nginx |
+
+`/actuator` is intentionally not proxied. Health:
+`docker compose exec backend curl -fsS localhost:8080/actuator/health`.
+
+### .env keys that matter
+
+| Key | Default | Effect |
+|---|---|---|
+| `GROQ_API_KEY` | placeholder | Chat, summaries, verification. Uploads still index without it |
+| `POSTGRES_PASSWORD` | `verityai_dev` | Shared by the Postgres container and the backend |
+| `EMBEDDINGS_PROVIDER` | `onnx` | `onnx` = local semantic search (one-time model download into a volume); `off` = keyword-only |
+| `SERVER_SERVLET_SESSION_COOKIE_SECURE` | `false` | Set `true` once served over HTTPS |
+| `APP_BASE_URL` | empty | Public origin used in password-reset links |
+| `MAIL_*` | empty | Password-reset email; empty disables sending |
+| `MAX_FILE_SIZE_MB` | `25` | Backend limit; nginx accepts up to 30 MB |
+| `APP_PORT` | `8080` | Host port for the UI, e.g. `APP_PORT=3000 docker compose up -d` |
+
+Compose fills in the container-only values itself (`SPRING_PROFILES_ACTIVE=prod`,
+DB host `postgres`, `/var/lib/verityai/uploads`, `/var/lib/verityai/models`), so
+the same `.env` also works for the host-based flow below. Full list:
+`.env.example`.
+
+### Volumes and the non-root backend
+
+Named volumes survive `docker compose down`; only `docker compose down -v`
+deletes them (database included).
+
+| Volume | Container path | Contents |
+|---|---|---|
+| `verityai_uploads` | `/var/lib/verityai/uploads` | uploaded PDFs |
+| `verityai_embeddings` | `/var/lib/verityai/models` | ONNX MiniLM model cache |
+| `verityai_postgres_data` | `/var/lib/postgresql/data` | database |
+
+The JVM runs as uid/gid **10001 (`verity`)**. Docker creates named volumes
+root-owned, so `backend/docker-entrypoint.sh` chowns the two writable
+directories and then drops root with `setpriv`. Consequences:
+
+- New uploads are owned by uid 10001 inside the volume, not by your host user.
+  Inspect them with `docker compose exec backend ls -l /var/lib/verityai/uploads`;
+  back up through a container rather than via the host path (which needs root).
+- Files written by an older root-running container stay `root:root 0644` and
+  remain readable, so existing uploads keep working with no migration.
+- `docker compose exec` still opens a root shell (the image declares no default
+  `USER`), which is what lets the entrypoint repair volume ownership at startup.
+
+### Common commands
+
+```bash
+docker compose ps                     # status + health
+docker compose logs -f backend        # app logs (stdout)
+docker compose up -d --build          # rebuild and restart after a pull
+docker compose down                   # stop, keep data
+docker compose down -v                # stop and DELETE database + uploads
+```
+
+---
+
+## Alternative: run on the host (hot reload)
+
+Use this for backend/frontend development with instant reload. It needs Java 21,
+Node 20+ and Docker (for the database only), and assumes nothing is already
+listening on 8080/5173 (stop the compose stack first if it is).
 
 ### Prerequisites
 - Java 21 (Temurin/Eclipse Adoptium)
@@ -72,7 +157,7 @@ verity-ai/
 ├─ frontend/          # React SPA
 ├─ backend/           # Spring Boot API
 ├─ docs/              # Architecture, API reference, testing, deployment runbook
-├─ docker-compose.yml # Postgres 17 + pgvector (dev database)
+├─ docker-compose.yml # Full stack: Postgres 17 + pgvector, backend, nginx-served frontend
 ├─ .env.example       # Template for environment variables
 └─ README.md          # This file
 ```
@@ -91,6 +176,7 @@ verity-ai/
 - **Verification, Reports & History pages** (Phase 3) — Library-wide read models over stored claim results, generated summaries (facts vs interpretations) and persisted processing events
 - **Contradiction detection** (Phase 3, Feature 8) — Compares bounded claim pairs that share a subject and reports only genuine conflicts in five classes (numeric, temporal, attribute, causal, polarity), each with both claims, documents and page citations plus a LOW/MEDIUM/HIGH impact rating
 - **Dedicated search page** — Hybrid retrieval UI with document scope, honest strategy/model badges and PDF page jumps
+- **Themed UI** — Premium dark visual system by default, with a saved light/system option; theming only touches the shared shell, auth screens, dashboard and conversation styling, not routes, the API client or data flows
 - **Secure by default** — Session auth, HttpOnly cookies, CSRF, ownership enforcement
 - **Rate limited** — Per-IP *and* per-account login limits, per-user upload/AI quotas return 429 with `Retry-After`
 - **Observable** — Structured logs, request IDs, health endpoints, Actuator metrics
@@ -108,7 +194,7 @@ verity-ai/
 | Lint frontend | `cd frontend && npm run lint` |
 | Typecheck frontend | `cd frontend && npm run typecheck` |
 | DB migration | `cd backend && .\mvnw.cmd flyway:migrate` |
-| Reset DB | `docker compose down -v && docker compose up -d postgres` |
+| Reset DB + uploads (destroys data) | `docker compose down -v && docker compose up -d --build` |
 
 ---
 
@@ -210,38 +296,21 @@ Rate-limited responses (429) additionally carry a `Retry-After` header.
 
 ## Deployment
 
-Self-hosted deployment (Ubuntu server, systemd, nginx, Cloudflare, backups) is
-documented in **[docs/deployment.md](docs/deployment.md)**.
+Two supported paths, both documented in **[docs/deployment.md](docs/deployment.md)**:
+
+1. **Docker Compose (recommended):** `docker compose up -d --build` on the
+   server, one published port, Cloudflare Tunnel in front.
+2. **Host services:** systemd jar + host nginx (the original runbook), with
+   Postgres still in Docker.
 
 Key production settings:
 - `SERVER_SERVLET_SESSION_COOKIE_SECURE=true` (HTTPS)
-- `SPRING_PROFILES_ACTIVE=prod`
-- `RATE_LIMIT_*`, `GROQ_API_KEY`, and an absolute `UPLOAD_DIR` outside the web root
+- `APP_BASE_URL` and `CORS_ALLOWED_ORIGINS` set to the public origin
+- `POSTGRES_PASSWORD`, `GROQ_API_KEY`, `RATE_LIMIT_*` tuned for the deployment
+- Host-based installs only: an absolute `UPLOAD_DIR` outside the web root
 
 ---
 
 ## License
 
 MIT — see LICENSE file.
-## Premium UI refresh
-
-The frontend now uses a premium dark visual system by default, with a saved light/system theme option. The refresh updates the shared application shell, navigation, brand mark, landing experience, dashboard, authentication screens, and research conversation styling while retaining the existing React Router routes, API client, React Query data flows, and Spring Boot backend.
-
-### Frontend setup
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-### Frontend validation
-
-```bash
-npm run typecheck
-npm run lint
-npm test
-npm run build
-```
-
-The redesign does not introduce new backend endpoints or replace the existing LLM/RAG integration.
