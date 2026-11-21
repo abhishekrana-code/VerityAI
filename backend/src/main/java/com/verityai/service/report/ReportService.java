@@ -43,11 +43,11 @@ public class ReportService {
     private final DocumentSummaryRepository summaryRepository;
 
     @Transactional(readOnly = true)
-    public ReportListResponse list(UUID userId, int page, int size, String q, String summaryStatus) {
+    public ReportListResponse list(UUID userId, int page, int size, String q, String summaryStatus, UUID documentId) {
         Document.SummaryStatus status = parseStatus(summaryStatus);
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
             Sort.by(Sort.Direction.DESC, "updatedAt"));
-        Page<Document> documents = documentRepository.findAll(specification(userId, q, status), pageable);
+        Page<Document> documents = documentRepository.findAll(specification(userId, q, status, documentId), pageable);
 
         List<UUID> ids = documents.getContent().stream().map(Document::getId).toList();
         Map<UUID, List<DocumentSummary>> summaries = ids.isEmpty()
@@ -139,12 +139,15 @@ public class ReportService {
         return array != null && array.isArray() ? array.size() : 0;
     }
 
-    private Specification<Document> specification(UUID userId, String q, Document.SummaryStatus status) {
+    private Specification<Document> specification(UUID userId, String q, Document.SummaryStatus status, UUID documentId) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("user").get("id"), userId));
             predicates.add(cb.isNull(root.get("deletedAt")));
             predicates.add(cb.equal(root.get("status"), Document.DocumentStatus.READY));
+            if (documentId != null) {
+                predicates.add(cb.equal(root.get("id"), documentId));
+            }
             if (status != null) {
                 predicates.add(cb.equal(root.get("summaryStatus"), status));
             }

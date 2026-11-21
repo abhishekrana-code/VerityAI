@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 /**
  * Report index over processed documents (Phase 3 page gap). Regeneration stays
  * on the existing ownership-checked, rate-limited
@@ -31,7 +33,8 @@ public class ReportController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             @RequestParam(required = false) String q,
-            @RequestParam(required = false) String summaryStatus) {
-        return ResponseEntity.ok(reportService.list(user.getId(), page, size, q, summaryStatus));
+            @RequestParam(required = false) String summaryStatus,
+            @RequestParam(required = false) UUID documentId) {
+        return ResponseEntity.ok(reportService.list(user.getId(), page, size, q, summaryStatus, documentId));
     }
 }
