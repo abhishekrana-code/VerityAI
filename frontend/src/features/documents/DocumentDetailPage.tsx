@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   api,
@@ -15,7 +15,7 @@ import {
 } from '@/lib/api';
 import {
   ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle,
-  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder,
+  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, Network, FileBarChart,
 } from 'lucide-react';
 import { cn, isDeferredStatus } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -152,7 +152,23 @@ export function DocumentDetailPage() {
             uploaded {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {doc.status === 'READY' && (
+            <>
+              <Link
+                to={`/dashboard/knowledge-graph?documentId=${doc.id}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                <Network className="h-4 w-4" /> Knowledge graph
+              </Link>
+              <Link
+                to={`/dashboard/reports?documentId=${doc.id}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                <FileBarChart className="h-4 w-4" /> Report
+              </Link>
+            </>
+          )}
           <button
             onClick={() => setPreviewOpen(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"

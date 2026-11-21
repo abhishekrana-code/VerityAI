@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, type ReportItem, type ReportListResponse } from '@/lib/api';
 import { cn, isDeferredStatus } from '@/lib/utils';
@@ -43,17 +43,21 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function ReportsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Set when arriving from a document's "Report" action.
+  const documentFilter = searchParams.get('documentId') ?? '';
   const [page, setPage] = useState(0);
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
 
   const reportsQuery = useQuery({
-    queryKey: ['reports', page, query, status],
+    queryKey: ['reports', page, query, status, documentFilter],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
       if (query) params.set('q', query);
       if (status) params.set('summaryStatus', status);
+      if (documentFilter) params.set('documentId', documentFilter);
       return api.get<ReportListResponse>(`/reports?${params.toString()}`);
     },
     placeholderData: (previous) => previous,
@@ -73,6 +77,13 @@ export function ReportsPage() {
     setPage(0);
   };
 
+  const clearDocumentFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('documentId');
+    setSearchParams(next, { replace: true });
+    setPage(0);
+  };
+
   return (
     <div className="space-y-6">
       <section className="relative isolate overflow-hidden rounded-[26px] border border-indigo-400/15 bg-gradient-to-br from-indigo-500/[0.14] via-card to-cyan-500/[0.08] p-6 sm:p-8">
@@ -85,6 +96,22 @@ export function ReportsPage() {
           interpretation of it.
         </p>
       </section>
+
+      {documentFilter && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/[0.06] px-4 py-3 text-sm">
+          <span className="text-muted-foreground">
+            Showing the report for{' '}
+            <span className="font-medium text-foreground">{items[0]?.documentName ?? 'this document'}</span>.
+          </span>
+          <button
+            type="button"
+            onClick={clearDocumentFilter}
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent"
+          >
+            Show all reports
+          </button>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3 rounded-2xl border border-border/80 bg-card/60 p-3 lg:flex-row lg:items-center">
         <form onSubmit={submitSearch} className="flex min-w-0 flex-1 items-center gap-2">
@@ -140,9 +167,9 @@ export function ReportsPage() {
           {items.length === 0 ? (
             <PageEmpty
               icon={FileBarChart}
-              title={query || status ? 'No reports match these filters' : 'No reports yet'}
+              title={query || status || documentFilter ? 'No reports match these filters' : 'No reports yet'}
               description={
-                query || status
+                query || status || documentFilter
                   ? 'Clear the search or status filter to see every processed document.'
                   : 'Reports are generated after a document finishes processing. Upload a PDF and its summary will appear here when it is ready.'
               }

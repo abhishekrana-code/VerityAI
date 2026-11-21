@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   api,
@@ -44,13 +45,23 @@ const GRAPH_HEIGHT = 540;
 export function KnowledgeGraphPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [documentId, setDocumentId] = useState('');
+  // A document page can open the graph already filtered to that document.
+  const [documentId, setDocumentId] = useState(() => searchParams.get('documentId') ?? '');
   const [entityType, setEntityType] = useState('');
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ doc: PdfPreviewTarget; page: number } | null>(null);
+
+  // Consume the hand-off filter so later manual changes are not overridden on reload.
+  useEffect(() => {
+    if (!searchParams.get('documentId')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('documentId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const { data: documents } = useQuery({
     queryKey: ['documents', 'ready', 'knowledge-graph'],
@@ -553,6 +564,14 @@ function EntityPanel({
         Open source page
         <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
+
+      <Link
+        to={`/dashboard/documents/${node.documentId}`}
+        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs font-semibold transition hover:bg-accent"
+      >
+        Open document details
+        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
 
       <div className="mt-5 border-t border-border/60 pt-4">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
