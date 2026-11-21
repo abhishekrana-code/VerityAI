@@ -1,4 +1,10 @@
-version: '3.8'
+# Full stack: `docker compose up -d --build` runs Postgres, the Spring backend
+# and the nginx-served SPA. `.env` supplies deploy-specific values (Groq key,
+# mail, CORS, passwords); container-only settings are fixed below so the same
+# .env also keeps working for host-based development.
+#
+# Open http://localhost:${APP_PORT:-8080} once `docker compose ps` reports the
+# services healthy.
 
 services:
   postgres:
@@ -7,18 +13,84 @@ services:
     image: pgvector/pgvector:0.8.7-pg17
     container_name: verityai-postgres
     environment:
-      POSTGRES_DB: verityai
-      POSTGRES_USER: verityai
+      POSTGRES_DB: ${POSTGRES_DB:-verityai}
+      POSTGRES_USER: ${POSTGRES_USER:-verityai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-verityai_dev}
     ports:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U verityai -d verityai"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-verityai} -d ${POSTGRES_DB:-verityai}"]
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    image: verityai-backend:local
+    container_name: verityai-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Everything in .env that is deploy-specific (GROQ_API_KEY, MAIL_*, rate
+    # limits, …) applies here. Missing file is fine: defaults take over.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # The dev profile redirects uploads to a temp dir and logs SQL at TRACE,
+      # which is wrong inside a container; prod is the correct runtime profile.
+      SPRING_PROFILES_ACTIVE: prod
+      # The database is reached by service name, not the host's 5434 mapping.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-verityai}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-verityai}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-verityai_dev}
+      # Plain HTTP by default so the stack works on localhost; set true when a
+      # TLS terminator (Cloudflare Tunnel, nginx with certificates) is in front.
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: ${SERVER_SERVLET_SESSION_COOKIE_SECURE:-false}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      # nginx proxies from the Compose bridge network, so those peers must be
+      # allowed to supply X-Forwarded-For for rate limiting to see real clients.
+      # Distinct name so a host-oriented value in .env does not weaken it.
+      TRUSTED_PROXY_PATTERN: '${COMPOSE_TRUSTED_PROXY_PATTERN:-127\.0\.0\.1|0:0:0:0:0:0:0:1|::1|172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+|10\.\d+\.\d+\.\d+}'
+      UPLOAD_DIR: /var/lib/verityai/uploads
+      EMBEDDINGS_CACHE_DIR: /var/lib/verityai/models
+      EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-onnx}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      APP_BASE_URL: ${APP_BASE_URL:-}
+    volumes:
+      - uploads:/var/lib/verityai/uploads
+      - embeddings:/var/lib/verityai/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    image: verityai-frontend:local
+    container_name: verityai-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  # Uploaded PDFs and the ONNX embedding model cache, kept across restarts.
+  uploads:
+  embeddings:
