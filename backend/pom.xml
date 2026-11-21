@@ -215,6 +215,17 @@
                         </annotationProcessorPath>
                     </annotationProcessorPaths>
                 </configuration>
+                <executions>
+                    <!-- Without the Spring Boot parent POM this goal is not bound
+                         automatically, so `mvn package` would emit a thin jar
+                         with no Main-Class and the app could not be launched. -->
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
