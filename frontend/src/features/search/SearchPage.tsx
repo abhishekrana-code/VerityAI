@@ -225,7 +225,7 @@ export function SearchPage() {
         <PageEmpty
           icon={Search}
           title="Start with a question or a phrase"
-          description="Search runs over the extracted text of your processed PDFs. Results link back to the exact page so you can verify the source yourself."
+          description="Search runs over the extracted text of your processed PDFs. Results link back to the exact page so you can read the passage yourself."
         />
       )}
 

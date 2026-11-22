@@ -192,7 +192,7 @@ export function LandingPage() {
               {
                 step: '03',
                 title: 'Check the Evidence',
-                description: 'Open any citation to read the source passage, then verify the answer\'s claims against it.',
+                description: 'Open any citation to read the source passage, then compare the answer\'s claims with it.',
                 icon: CheckCircle,
               },
             ].map((item) => (
