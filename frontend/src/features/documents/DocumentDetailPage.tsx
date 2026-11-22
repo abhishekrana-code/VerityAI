@@ -16,11 +16,12 @@ import {
 } from '@/lib/api';
 import {
   ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle, MessageSquare,
-  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, ArrowUpRight, Network, FileBarChart,
+  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, ArrowUpRight, Network, Download,
 } from 'lucide-react';
 import { cn, formatFileSize, isDeferredStatus, pluralize } from '@/lib/utils';
 import { ProcessingStepper } from '@/components/ProcessingStepper';
 import { askAboutDocument } from '@/lib/conversation';
+import { summaryToMarkdown } from '@/lib/summaryMarkdown';
 import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -162,6 +163,19 @@ export function DocumentDetailPage() {
     );
   }
 
+  // The export is built in the browser from the stored sections, so it is
+  // instant and costs no model call.
+  const exportSummary = () => {
+    if (!summaries?.summaries.length) return;
+    const markdown = summaryToMarkdown(doc, summaries.summaries);
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${doc.originalFilename.replace(/\.pdf$/i, '')}-summary.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: 'summary', label: 'Summary' },
     { key: 'processing', label: 'Processing' },
@@ -214,13 +228,15 @@ export function DocumentDetailPage() {
               >
                 <Network className="h-4 w-4" /> Knowledge graph
               </Link>
-              <Link
-                to={`/dashboard/reports?documentId=${doc.id}`}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                <FileBarChart className="h-4 w-4" /> Report
-              </Link>
             </>
+          )}
+          {doc.status === 'READY' && !!summaries?.summaries.length && (
+            <button
+              onClick={exportSummary}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+            >
+              <Download className="h-4 w-4" /> Export summary
+            </button>
           )}
           <button
             onClick={() => setPreviewOpen(true)}

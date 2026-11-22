@@ -475,41 +475,6 @@ export interface VerificationStatsResponse {
   unverified: number;
 }
 
-export type ReportSummaryStatus = 'NONE' | 'PENDING' | 'READY' | 'FAILED';
-
-export interface ReportFinding {
-  text: string;
-  type: 'FACT' | 'INTERPRETATION';
-}
-
-export interface ReportItem {
-  documentId: string;
-  documentName: string;
-  pageCount: number | null;
-  updatedAt: string;
-  summaryStatus: ReportSummaryStatus;
-  summaryError: string | null;
-  sectionCount: number;
-  model: string | null;
-  generatedAt: string | null;
-  executiveSummary: string;
-  keyFindings: ReportFinding[];
-  entityCount: number;
-  dateStatCount: number;
-  topicCount: number;
-  questionCount: number;
-}
-
-export interface ReportListResponse {
-  content: ReportItem[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-  first: boolean;
-  last: boolean;
-}
-
 export interface HistoryItem {
   id: string;
   documentId: string;

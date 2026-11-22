@@ -466,65 +466,6 @@ class IntelligencePagesIntegrationTest {
     }
 
     // ------------------------------------------------------------------
-    // Report index
-    // ------------------------------------------------------------------
-
-    @Test
-    void reportsExposePersistedSummarySections() throws Exception {
-        String email = uniqueEmail();
-        Cookie session = register(email);
-
-        Document document = document(user(email), "annual-report.pdf");
-        document.setSummaryStatus(Document.SummaryStatus.READY);
-        documentRepository.save(document);
-
-        summary(document, DocumentSummary.Kind.EXECUTIVE_SUMMARY,
-            "{\"summary\":\"Revenue grew 42% in 2023 and margins improved.\"}");
-        summary(document, DocumentSummary.Kind.KEY_FINDINGS, """
-            {"findings":[
-              {"text":"Revenue grew 42% in 2023.","type":"FACT"},
-              {"text":"Growth is likely to continue.","type":"INTERPRETATION"}
-            ]}
-            """);
-        summary(document, DocumentSummary.Kind.ENTITIES,
-            "{\"entities\":[{\"name\":\"Alpha Corp\",\"type\":\"ORGANIZATION\"}]}");
-        summary(document, DocumentSummary.Kind.DATES_AND_STATS,
-            "{\"items\":[{\"value\":\"2023\"}]}");
-        summary(document, DocumentSummary.Kind.TOPICS,
-            "{\"topics\":[\"finance\",\"growth\"]}");
-        summary(document, DocumentSummary.Kind.SUGGESTED_QUESTIONS,
-            "{\"questions\":[\"What drove growth?\"]}");
-
-        MvcResult result = mockMvc.perform(get("/api/v1/reports")
-                .cookie(session)
-                .param("q", "annual-report"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalElements").value(1))
-            .andReturn();
-        JsonNode item = objectMapper.readTree(result.getResponse().getContentAsString()).at("/content/0");
-
-        assertThat(item.get("documentId").asText()).isEqualTo(document.getId().toString());
-        assertThat(item.get("documentName").asText()).isEqualTo("annual-report.pdf");
-        assertThat(item.get("summaryStatus").asText()).isEqualTo("READY");
-        assertThat(item.get("executiveSummary").asText()).contains("42%");
-        assertThat(item.get("sectionCount").asInt()).isEqualTo(6);
-        assertThat(item.get("model").asText()).isEqualTo("test-summary-model");
-        assertThat(item.get("entityCount").asInt()).isEqualTo(1);
-        assertThat(item.get("dateStatCount").asInt()).isEqualTo(1);
-        assertThat(item.get("topicCount").asInt()).isEqualTo(2);
-        assertThat(item.get("questionCount").asInt()).isEqualTo(1);
-        assertThat(item.get("keyFindings").size()).isEqualTo(2);
-        assertThat(item.at("/keyFindings/0/type").asText()).isEqualTo("FACT");
-        assertThat(item.at("/keyFindings/1/type").asText()).isEqualTo("INTERPRETATION");
-
-        String intruderEmail = uniqueEmail();
-        Cookie intruderSession = register(intruderEmail);
-        mockMvc.perform(get("/api/v1/reports").cookie(intruderSession))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalElements").value(0));
-    }
-
-    // ------------------------------------------------------------------
     // History feed
     // ------------------------------------------------------------------
 

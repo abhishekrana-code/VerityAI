@@ -368,34 +368,6 @@ Semantics:
 
 ---
 
-## Reports — `/reports` (Phase 3)
-
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/reports` | Paginated report index over READY documents (`page`, `size`, `q`, `summaryStatus`) |
-
-`summaryStatus`: `ALL` (default) | `NONE` | `PENDING` | `READY` | `FAILED`.
-A report is the persisted summary set; listing never calls a model.
-
-```jsonc
-{
-  "content": [{
-    "documentId": "…", "documentName": "annual-report.pdf", "pageCount": 42,
-    "updatedAt": "…", "summaryStatus": "READY", "summaryError": null,
-    "sectionCount": 6, "model": "gpt-oss-20b", "generatedAt": "…",
-    "executiveSummary": "…",
-    "keyFindings": [{ "text": "…", "type": "FACT" }, { "text": "…", "type": "INTERPRETATION" }],
-    "entityCount": 18, "dateStatCount": 9, "topicCount": 6, "questionCount": 5
-  }],
-  "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "first": true, "last": true
-}
-```
-
-Regeneration remains on `POST /documents/{id}/summaries/regenerate`
-(ownership-checked, rate-limited, atomic replace).
-
----
-
 ## History — `/history` (Phase 3)
 
 | Method | Path | Notes |
