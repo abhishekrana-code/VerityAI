@@ -1,0 +1,80 @@
+# Dedicated Tailscale node for VerityAI.
+#
+# Tailscale allows one DNS name per device, so getting a `verityai.*` hostname
+# without renaming the machine that already serves other apps means running a
+# second, minimal node. It joins the existing Compose network and funnels
+# straight to the nginx service, so no host port is involved.
+#
+#   docker compose -f docker-compose.tailscale.yml up -d
+#   docker logs -f verityai-tailscale      # first run prints a login URL
+#
+# Public URL: https://verityai.<tailnet>.ts.net  (port 443, no port suffix)
+#
+# Funnel is public internet exposure. For tailnet-only access, replace the
+# `funnel` command in the entrypoint with `serve`.
+#
+# Why a custom entrypoint: the image's default `containerboot` aborts the
+# interactive login after 60 seconds, which rotates the auth URL before it can
+# be opened and leaves the node flapping. Running `tailscaled` directly lets
+# `tailscale up --timeout=0s` wait as long as needed. An auth key
+# (TS_AUTHKEY in .env.tailscale) skips the prompt entirely.
+
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.104.7
+    container_name: verityai-tailscale
+    hostname: verityai
+    environment:
+      # Optional: set TS_AUTHKEY in .env.tailscale to log in without a prompt.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        tailscaled \
+          --state=/var/lib/tailscale/tailscaled.state \
+          --socket=/tmp/tailscaled.sock \
+          --tun=userspace-networking &
+        TS_PID=$$!
+
+        # Wait for the LocalAPI socket before talking to it.
+        i=0
+        while [ ! -S /tmp/tailscaled.sock ]; do
+          i=$$((i + 1))
+          if [ $$i -gt 30 ]; then
+            echo "tailscaled socket never appeared" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+
+        # Blocks until the device is approved. --accept-dns=false keeps Docker's
+        # DNS so `frontend` still resolves on the Compose network.
+        if [ -n "$$TS_AUTHKEY" ]; then
+          tailscale --socket=/tmp/tailscaled.sock up \
+            --hostname=verityai --accept-dns=false --authkey="$$TS_AUTHKEY"
+        else
+          tailscale --socket=/tmp/tailscaled.sock up \
+            --hostname=verityai --accept-dns=false --timeout=0s
+        fi
+
+        # Publish publicly through Funnel.
+        tailscale --socket=/tmp/tailscaled.sock \
+          funnel --bg --https=443 http://frontend:80
+
+        wait $$TS_PID
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    networks:
+      - verityai
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:
+
+networks:
+  # Reuse the network created by docker-compose.yml so `frontend` resolves.
+  verityai:
+    external: true
+    name: verityai_default
