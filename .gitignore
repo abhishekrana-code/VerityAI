@@ -84,6 +84,10 @@ temp/
 # Local database backups (contain user data — never commit)
 backup/
 
+# Local document uploads (contain user data — never commit; the dev profile
+# uses a temp dir, but a host-run prod profile writes here)
+backend/uploads/
+
 # =============================================================================
 # Test & Coverage
 # =============================================================================
