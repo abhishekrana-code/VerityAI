@@ -19,7 +19,7 @@ export function Logo({ compact = false, light = false, to = '/dashboard' }: Logo
       {!compact && (
         <span className={`font-[var(--font-display)] text-[17px] font-semibold tracking-[-0.02em] ${light ? 'text-white' : 'text-foreground'}`}>
           Verity<span className="text-primary">AI</span>
-          <span className="mt-0.5 block text-[10px] font-medium tracking-normal text-muted-foreground">Research, verified.</span>
+          <span className="mt-0.5 block text-[10px] font-medium tracking-normal text-muted-foreground">Cited answers from your PDFs.</span>
         </span>
       )}
     </Link>

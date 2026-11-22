@@ -20,5 +20,5 @@
   <text x="90" y="405" fill="#cbd5e1" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="38" font-weight="500">AI research with answers you can verify.</text>
   <text x="90" y="490" fill="#94a3b8" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="27">Every claim cites its document, page, and excerpt.</text>
   <rect x="90" y="530" width="360" height="58" rx="14" fill="#6366f1" opacity="0.18" stroke="#818cf8" stroke-opacity="0.4"/>
-  <text x="118" y="568" fill="#c7d2fe" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="600">Research, verified.</text>
+  <text x="118" y="568" fill="#c7d2fe" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="600">Cited answers from your PDFs.</text>
 </svg>
