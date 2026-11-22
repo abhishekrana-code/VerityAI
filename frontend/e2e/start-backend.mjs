@@ -11,7 +11,7 @@
  *
  * Never point this at a developer backend: E2E must not send real email.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -125,18 +125,29 @@ const env = {
 await ensureDatabase();
 
 log('Starting Spring Boot on port 8081...');
-const maven = isWindows ? 'mvnw.cmd' : './mvnw';
-const child = spawn(
-  maven,
-  ['-B', '--no-transfer-progress', '-Dspring-boot.run.fork=false', 'spring-boot:run'],
-  {
-    cwd: backendDir,
-    env,
-    stdio: 'inherit',
-    shell: isWindows,
-    detached: !isWindows,
-  },
-);
+const mavenArgs = [
+  '-B',
+  '--no-transfer-progress',
+  '-Dspring-boot.run.fork=false',
+  'spring-boot:run',
+];
+// On Windows the `.cmd` wrapper cannot be started from Node without a cmd.exe
+// shell (`shell: true`), which is awkward to interrupt and quotes paths badly
+// under Git Bash. The POSIX wrapper script works everywhere bash exists, so use
+// it directly on Windows too; CI runs on Linux and execs it as-is.
+const child = isWindows
+  ? spawn('bash', ['-c', `./mvnw ${mavenArgs.join(' ')}`], {
+      cwd: backendDir,
+      env,
+      stdio: 'inherit',
+      detached: false,
+    })
+  : spawn('./mvnw', mavenArgs, {
+      cwd: backendDir,
+      env,
+      stdio: 'inherit',
+      detached: true,
+    });
 
 let stopping = false;
 function stop(code = 0) {
@@ -161,6 +172,21 @@ function stop(code = 0) {
 
 process.on('SIGINT', () => stop(0));
 process.on('SIGTERM', () => stop(0));
+
+// If this wrapper exits without an explicit signal (Playwright may kill only the
+// wrapper), take the JVM with it instead of leaving port 8081 orphaned.
+process.on('exit', () => {
+  try {
+    if (!child.pid) return;
+    if (isWindows) {
+      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      process.kill(-child.pid, 'SIGTERM');
+    }
+  } catch {
+    // Nothing left to clean up.
+  }
+});
 
 child.once('error', (error) => {
   console.error(`[e2e-backend] failed to start: ${error.message}`);

@@ -12,6 +12,10 @@ test.describe('password reset', () => {
     const newPassword = 'E2ePassword456!';
 
     await registerUser(page, user);
+    // Registration signs the account in; the forgot-password route is public,
+    // so sign out first or the app bounces this browser to the dashboard.
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(/\/login$/);
     await page.goto('/forgot-password');
     await page.locator('#email').fill(user.email);
     await page.getByRole('button', { name: 'Send reset link' }).click();

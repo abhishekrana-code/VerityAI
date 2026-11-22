@@ -5,6 +5,9 @@ const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: './e2e',
+  // On Windows the forked Spring JVM outlives the webServer wrapper; stop it so
+  // the runner does not wait on its inherited stdout pipe forever.
+  globalTeardown: './e2e/global-teardown.ts',
   // The suite shares one database and a single SMTP mailbox; run deterministically.
   fullyParallel: false,
   workers: 1,
