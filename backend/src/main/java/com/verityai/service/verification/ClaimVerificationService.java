@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -148,6 +149,13 @@ public class ClaimVerificationService {
             throw ApiException.validation("Only completed messages with content can be verified");
         }
 
+        // A quick check must never replace a model-backed result: the deep check
+        // already covers everything the quick layer records.
+        if (mode == Mode.QUICK && claimRepository.findByMessageIdOrderByClaimIndexAsc(messageId).stream()
+                .anyMatch(row -> row.getModel() != null)) {
+            return getVerification(conversationId, messageId);
+        }
+
         List<MessageCitation> citations = loadCitations(messageId);
         List<String> allClaims = segmentClaims(message.getContent());
         List<String> analyzed = allClaims.subList(0, Math.min(allClaims.size(), maxClaims));
@@ -164,11 +172,7 @@ public class ClaimVerificationService {
 
         if (drafts.isEmpty()) {
             // Nothing to check (e.g. an empty/very short answer) — not a failure.
-            response.setStatus(Status.COMPLETED);
-            response.setMode(mode);
-            response.setClaims(List.of());
-            response.setInvalidReferences(List.of());
-            return response;
+            return assessed(response, drafts, mode, null);
         }
 
         // Deterministic classification: uncited claims are unsupported by evidence.
@@ -186,14 +190,7 @@ public class ClaimVerificationService {
             // without spending a model call. Cited claims stay unclassified:
             // citing a source is not the same as being supported by it.
             persist(messageId, message, drafts, null);
-            boolean allClassified = drafts.stream().allMatch(d -> d.supportClass != null);
-            response.setStatus(allClassified ? Status.COMPLETED : Status.PARTIAL);
-            response.setMode(Mode.QUICK);
-            response.setModel(null);
-            response.setVerifiedAt(java.time.Instant.now());
-            response.setClaims(toResults(drafts));
-            response.setInvalidReferences(toInvalidReferences(drafts));
-            return response;
+            return assessed(response, drafts, Mode.QUICK, null);
         }
 
         List<ClaimDraft> pending = drafts.stream().filter(d -> d.supportClass == null).toList();
@@ -233,10 +230,17 @@ public class ClaimVerificationService {
         }
 
         persist(messageId, message, drafts, usedModel);
-        response.setStatus(classified == drafts.size() ? Status.COMPLETED : Status.PARTIAL);
-        response.setMode(Mode.DEEP);
-        response.setModel(usedModel);
-        response.setVerifiedAt(java.time.Instant.now());
+        return assessed(response, drafts, Mode.DEEP, usedModel);
+    }
+
+    /** Fills in the fields every stored result shares; status follows the drafts. */
+    private ClaimVerificationResponse assessed(ClaimVerificationResponse response, List<ClaimDraft> drafts,
+                                               Mode mode, String model) {
+        boolean allClassified = drafts.stream().allMatch(d -> d.supportClass != null);
+        response.setStatus(allClassified ? Status.COMPLETED : Status.PARTIAL);
+        response.setMode(mode);
+        response.setModel(model);
+        response.setVerifiedAt(Instant.now());
         response.setClaims(toResults(drafts));
         response.setInvalidReferences(toInvalidReferences(drafts));
         return response;
@@ -446,7 +450,7 @@ public class ClaimVerificationService {
 
     private void persist(UUID messageId, Message message, List<ClaimDraft> drafts, String usedModel) {
         List<MessageClaimVerification> rows = new ArrayList<>();
-        java.time.Instant now = java.time.Instant.now();
+        Instant now = Instant.now();
         for (ClaimDraft draft : drafts) {
             MessageClaimVerification row = new MessageClaimVerification();
             row.setMessage(message);

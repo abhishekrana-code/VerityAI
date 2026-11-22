@@ -38,17 +38,13 @@ export function trustLine(claims: ClaimResult[]): string {
   const cited = claims.filter((claim) => claim.citationIndexes.length > 0).length;
   const uncited = claims.length - cited;
 
-  let line: string;
-  if (cited === claims.length) {
-    line = `All ${pluralize(claims.length, 'claim')} cite a source`;
-  } else if (cited === 0) {
-    line = `None of ${pluralize(claims.length, 'claim')} cite a source`;
-  } else {
-    line = `${cited} of ${claims.length} claims cite a source · ${
-      uncited === 1 ? '1 has no citation' : `${uncited} have no citation`
-    }`;
+  // One shape for every count, so "1 of 1 claim cites" stays grammatical.
+  let line = `${cited} of ${pluralize(claims.length, 'claim')} ${
+    cited === 1 ? 'cites' : 'cite'
+  } a source`;
+  if (cited > 0 && uncited > 0) {
+    line += ` · ${uncited === 1 ? '1 has no citation' : `${uncited} have no citation`}`;
   }
-
   if (claims.some((claim) => claim.hasInvalidCitation)) {
     line += ' · a citation does not match the sources';
   }

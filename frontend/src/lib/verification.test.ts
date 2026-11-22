@@ -22,14 +22,18 @@ describe('trustLine', () => {
 
   it('says when every claim cites a source', () => {
     expect(trustLine([claim(0, [0]), claim(1, [1]), claim(2, [2])])).toBe(
-      'All 3 claims cite a source',
+      '3 of 3 claims cite a source',
     );
   });
 
   it('says when no claim cites a source', () => {
     expect(trustLine([claim(0, []), claim(1, []), claim(2, [])])).toBe(
-      'None of 3 claims cite a source',
+      '0 of 3 claims cite a source',
     );
+  });
+
+  it('stays grammatical for a single claim', () => {
+    expect(trustLine([claim(0, [0])])).toBe('1 of 1 claim cites a source');
   });
 
   it('never mentions support or verification, only citations', () => {

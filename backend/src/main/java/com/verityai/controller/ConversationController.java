@@ -4,6 +4,7 @@ import com.verityai.dto.request.AskQuestionRequest;
 import com.verityai.dto.request.CreateConversationRequest;
 import com.verityai.dto.request.UpdateConversationRequest;
 import com.verityai.dto.response.ClaimVerificationResponse;
+import com.verityai.dto.response.ClaimVerificationResponse.Mode;
 import com.verityai.dto.response.ConversationListResponse;
 import com.verityai.dto.response.ConversationResponse;
 import com.verityai.dto.response.MessageListResponse;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -222,8 +224,8 @@ public class ConversationController {
             @PathVariable UUID id,
             @PathVariable UUID messageId,
             @RequestParam(defaultValue = "deep") String mode) {
-        com.verityai.dto.response.ClaimVerificationResponse.Mode verificationMode = parseMode(mode);
-        if (verificationMode == com.verityai.dto.response.ClaimVerificationResponse.Mode.DEEP) {
+        Mode verificationMode = parseMode(mode);
+        if (verificationMode == Mode.DEEP) {
             rateLimitService.checkAiRequest(user.getId());
         }
         conversationRepository.findByIdAndUserIdAndArchivedAtIsNull(id, user.getId())
@@ -231,10 +233,10 @@ public class ConversationController {
         return ResponseEntity.ok(claimVerificationService.verify(id, messageId, verificationMode));
     }
 
-    private static com.verityai.dto.response.ClaimVerificationResponse.Mode parseMode(String mode) {
-        return switch (mode.trim().toLowerCase(java.util.Locale.ROOT)) {
-            case "quick" -> com.verityai.dto.response.ClaimVerificationResponse.Mode.QUICK;
-            case "deep" -> com.verityai.dto.response.ClaimVerificationResponse.Mode.DEEP;
+    private static Mode parseMode(String mode) {
+        return switch (mode.trim().toLowerCase(Locale.ROOT)) {
+            case "quick" -> Mode.QUICK;
+            case "deep" -> Mode.DEEP;
             default -> throw ApiException.validation("mode must be quick or deep");
         };
     }

@@ -9,6 +9,7 @@ import com.verityai.entity.Document;
 import com.verityai.entity.Message;
 import com.verityai.entity.MessageCitation;
 import com.verityai.entity.MessageClaimVerification;
+import com.verityai.entity.MessageClaimVerification.SupportClass;
 import com.verityai.repository.MessageCitationRepository;
 import com.verityai.repository.MessageClaimVerificationRepository;
 import com.verityai.repository.MessageRepository;
@@ -19,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -128,6 +130,27 @@ class ClaimVerificationQuickModeTest {
             assertThat(row.getModel()).isNull();
             assertThat(row.getVerifiedAt()).isNotNull();
         });
+    }
+
+    @Test
+    void quickCheckKeepsAnAlreadyStoredDeepResult() {
+        MessageClaimVerification deepRow = new MessageClaimVerification();
+        deepRow.setClaimIndex(0);
+        deepRow.setClaimText("Revenue grew 14 percent in 2024. [S1]");
+        deepRow.setSupportClass(SupportClass.SUPPORTED);
+        deepRow.setCitationIndexes(List.of(0));
+        deepRow.setModel("test-model");
+        deepRow.setVerifiedAt(Instant.now());
+        when(claimRepository.findByMessageIdOrderByClaimIndexAsc(messageId)).thenReturn(List.of(deepRow));
+
+        ClaimVerificationResponse response = service.verify(conversationId, messageId, Mode.QUICK);
+
+        assertThat(response.getMode()).isEqualTo(Mode.DEEP);
+        assertThat(response.getClaims()).singleElement()
+            .satisfies(claim -> assertThat(claim.getSupportClass()).isEqualTo("SUPPORTED"));
+        verifyNoInteractions(llmService);
+        verify(claimRepository, never()).saveAll(anyList());
+        verify(claimRepository, never()).deleteByMessageId(messageId);
     }
 
     @Test

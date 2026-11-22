@@ -145,7 +145,8 @@ export function ConversationPage() {
           }
           setVerifications((current) => ({ ...current, [message.id]: result }));
         } catch {
-          // Leave the trust line absent rather than inventing a result.
+          // Never invent a result; drop the guard so a later render can retry.
+          quickChecksStarted.current.delete(message.id);
         }
       })();
     }
@@ -646,7 +647,7 @@ function MessageBubble({
                 <p className="text-xs text-muted-foreground">Checking citations…</p>
               )}
 
-              {verification && isQuickCheck(verification) && (
+              {verification && isQuickCheck(verification) && verification.claims.some((c) => !c.supportClass) && (
                 <p className="text-[11px] leading-5 text-muted-foreground">
                   Citation check only — no claim has been assessed for support yet.
                 </p>
