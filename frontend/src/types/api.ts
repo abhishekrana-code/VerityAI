@@ -386,52 +386,6 @@ export interface KnowledgeConnectionsResponse {
   connections: KnowledgeConnection[];
 }
 
-export interface KnowledgeGraphNode {
-  id: string;
-  name: string;
-  type: KnowledgeEntityType;
-  mentionCount: number;
-  documentId: string;
-  documentName: string;
-  firstPage: number | null;
-  evidenceExcerpt: string | null;
-}
-
-export interface KnowledgeGraphEdge {
-  id: string;
-  source: string;
-  target: string;
-  relationType: 'CO_OCCURS';
-  weight: number;
-  documentId: string;
-  firstPage: number | null;
-  evidenceExcerpt: string | null;
-}
-
-export interface KnowledgeGraphResponse {
-  documentId: string | null;
-  documentName: string | null;
-  scope: 'DOCUMENT' | 'LIBRARY';
-  status: 'NONE' | 'PENDING' | 'READY' | 'FAILED';
-  error: string | null;
-  generatedAt: string | null;
-  entityCount: number;
-  relationCount: number;
-  documentCount: number;
-  returnedEntities: number;
-  truncated: boolean;
-  nodes: KnowledgeGraphNode[];
-  edges: KnowledgeGraphEdge[];
-}
-
-export interface KnowledgeGraphRebuildResponse {
-  requested: number;
-  rebuilt: number;
-  skipped: number;
-  rebuiltDocumentIds: string[];
-  errors: string[];
-}
-
 // ---------------------------------------------------------------------------
 // Phase 3: verification / reports / history read models
 // ---------------------------------------------------------------------------

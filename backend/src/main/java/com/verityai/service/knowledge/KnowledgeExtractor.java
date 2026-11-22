@@ -1,7 +1,6 @@
 package com.verityai.service.knowledge;
 
 import com.verityai.entity.KnowledgeEntity.EntityType;
-import com.verityai.entity.KnowledgeRelation.RelationType;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,16 +18,13 @@ import java.util.regex.Pattern;
  *
  * <p>No model call is made here. Entities are pattern candidates (dates,
  * metrics, acronyms, proper-noun phrases) merged with the LLM-extracted
- * ENTITIES summary section when one exists. Relations are co-occurrence links
- * inside the same chunk, not semantic assertions. This keeps the graph
- * available offline, bounded, and honest about what it represents.</p>
+ * ENTITIES summary section when one exists. Connections between documents are
+ * derived at read time from shared entity names, so no edge table is stored.</p>
  */
 public final class KnowledgeExtractor {
 
-    /** Hard caps keep the graph (and the API payload) bounded per document. */
+    /** Hard caps keep the entity index (and the API payload) bounded per document. */
     static final int MAX_ENTITIES = 150;
-    static final int MAX_RELATIONS = 1500;
-    static final int MAX_ENTITIES_PER_CHUNK = 12;
     static final int MAX_NAME_LENGTH = 120;
     static final int EXCERPT_LENGTH = 320;
 
@@ -124,16 +120,11 @@ public final class KnowledgeExtractor {
                                   int mentionCount, Integer firstPage, String evidenceExcerpt) {
     }
 
-    public record ExtractedRelation(String sourceNormalized, String targetNormalized,
-                                    int weight, Integer firstPage, String evidenceExcerpt) {
-    }
-
-    public record Extraction(List<ExtractedEntity> entities, List<ExtractedRelation> relations,
-                             boolean entitiesTruncated, boolean relationsTruncated) {
+    public record Extraction(List<ExtractedEntity> entities, boolean entitiesTruncated) {
     }
 
     /**
-     * Extracts entities and co-occurrence relations from document chunks.
+     * Extracts entities from document chunks.
      *
      * @param chunks           document chunks in reading order
      * @param summaryEntities  entities already extracted by the summary model
@@ -191,26 +182,8 @@ public final class KnowledgeExtractor {
             entities = entities.subList(0, MAX_ENTITIES);
         }
 
-        Map<String, ExtractedEntity> finalEntities = new LinkedHashMap<>();
-        for (MutableEntity entity : entities) {
-            finalEntities.put(entity.normalizedName, entity.toRecord());
-        }
-
-        Map<String, MutableRelation> relations = buildRelations(chunks, finalEntities);
-        List<MutableRelation> relationList = new ArrayList<>(relations.values());
-        relationList.sort(Comparator
-            .comparingInt((MutableRelation r) -> r.weight).reversed()
-            .thenComparing(r -> r.sourceNormalized)
-            .thenComparing(r -> r.targetNormalized));
-
-        boolean relationsTruncated = relationList.size() > MAX_RELATIONS;
-        if (relationsTruncated) {
-            relationList = relationList.subList(0, MAX_RELATIONS);
-        }
-
         List<ExtractedEntity> entityRecords = entities.stream().map(MutableEntity::toRecord).toList();
-        List<ExtractedRelation> relationRecords = relationList.stream().map(MutableRelation::toRecord).toList();
-        return new Extraction(entityRecords, relationRecords, entitiesTruncated, relationsTruncated);
+        return new Extraction(entityRecords, entitiesTruncated);
     }
 
     // ------------------------------------------------------------------
@@ -315,68 +288,6 @@ public final class KnowledgeExtractor {
     }
 
     // ------------------------------------------------------------------
-    // Relations
-    // ------------------------------------------------------------------
-
-    private static Map<String, MutableRelation> buildRelations(
-            List<ChunkText> chunks, Map<String, ExtractedEntity> entities) {
-        Map<String, MutableRelation> relations = new LinkedHashMap<>();
-        if (entities.size() < 2) {
-            return relations;
-        }
-
-        for (ChunkText chunk : chunks) {
-            if (chunk.content() == null || chunk.content().isBlank()) {
-                continue;
-            }
-            String normalizedText = " " + normalize(chunk.content()) + " ";
-
-            List<ExtractedEntity> present = new ArrayList<>();
-            for (ExtractedEntity entity : entities.values()) {
-                if (entity.normalizedName().contains(" ")) {
-                    if (normalizedText.contains(" " + entity.normalizedName() + " ")) {
-                        present.add(entity);
-                    }
-                } else if (normalizedText.contains(" " + entity.normalizedName() + " ")) {
-                    present.add(entity);
-                }
-            }
-            if (present.size() < 2) {
-                continue;
-            }
-            present.sort(Comparator
-                .comparingInt(ExtractedEntity::mentionCount).reversed()
-                .thenComparing(ExtractedEntity::normalizedName));
-            if (present.size() > MAX_ENTITIES_PER_CHUNK) {
-                present = present.subList(0, MAX_ENTITIES_PER_CHUNK);
-            }
-
-            String excerpt = excerpt(collapseWhitespace(chunk.content()), 0,
-                Math.min(collapseWhitespace(chunk.content()).length(), EXCERPT_LENGTH));
-            for (int i = 0; i < present.size(); i++) {
-                for (int j = i + 1; j < present.size(); j++) {
-                    String a = present.get(i).normalizedName();
-                    String b = present.get(j).normalizedName();
-                    String source = a.compareTo(b) <= 0 ? a : b;
-                    String target = a.compareTo(b) <= 0 ? b : a;
-                    String key = source + "\u0000" + target;
-                    MutableRelation relation = relations.get(key);
-                    if (relation == null) {
-                        relations.put(key, new MutableRelation(source, target, 1,
-                            chunk.pageNumber(), excerpt));
-                    } else {
-                        relation.weight++;
-                        if (relation.firstPage == null) {
-                            relation.firstPage = chunk.pageNumber();
-                        }
-                    }
-                }
-            }
-        }
-        return relations;
-    }
-
-    // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 
@@ -446,10 +357,6 @@ public final class KnowledgeExtractor {
         }
     }
 
-    static RelationType relationType() {
-        return RelationType.CO_OCCURS;
-    }
-
     // ------------------------------------------------------------------
     // Mutable work items
     // ------------------------------------------------------------------
@@ -477,24 +384,4 @@ public final class KnowledgeExtractor {
         }
     }
 
-    private static final class MutableRelation {
-        final String sourceNormalized;
-        final String targetNormalized;
-        int weight;
-        Integer firstPage;
-        final String evidenceExcerpt;
-
-        MutableRelation(String sourceNormalized, String targetNormalized, int weight,
-                        Integer firstPage, String evidenceExcerpt) {
-            this.sourceNormalized = sourceNormalized;
-            this.targetNormalized = targetNormalized;
-            this.weight = weight;
-            this.firstPage = firstPage;
-            this.evidenceExcerpt = evidenceExcerpt;
-        }
-
-        ExtractedRelation toRecord() {
-            return new ExtractedRelation(sourceNormalized, targetNormalized, weight, firstPage, evidenceExcerpt);
-        }
-    }
 }

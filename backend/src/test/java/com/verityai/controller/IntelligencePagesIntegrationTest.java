@@ -84,6 +84,7 @@ class IntelligencePagesIntegrationTest {
     @Autowired private MessageRepository messageRepository;
     @Autowired private MessageCitationRepository citationRepository;
     @Autowired private MessageClaimVerificationRepository verificationRepository;
+    @Autowired private com.verityai.service.knowledge.KnowledgeGraphService knowledgeGraphService;
 
     private record Csrf(Cookie cookie, String token) {
     }
@@ -235,14 +236,13 @@ class IntelligencePagesIntegrationTest {
     }
 
     // ------------------------------------------------------------------
-    // Knowledge graph
+    // Entity index and document connections
     // ------------------------------------------------------------------
 
     @Test
-    void knowledgeGraphIsBuiltFromChunksAndSummaryEntities() throws Exception {
+    void entityIndexMergesChunksAndSummaryEntities() throws Exception {
         String email = uniqueEmail();
         Cookie session = register(email);
-        Csrf csrf = csrf(session);
 
         Document document = document(user(email), "annual-report.pdf");
         chunk(document, 0, 1,
@@ -258,97 +258,74 @@ class IntelligencePagesIntegrationTest {
             ]}
             """);
 
-        mockMvc.perform(post("/api/v1/knowledge-graph/rebuild")
-                .cookie(session, csrf.cookie())
-                .header("X-XSRF-TOKEN", csrf.token())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"documentIds\":[\"" + document.getId() + "\"]}"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.rebuilt").value(1))
-            .andExpect(jsonPath("$.requested").value(1));
+        // Extraction is deterministic and runs on processing; forcing it here
+        // stands in for the READY transition.
+        assertThat(knowledgeGraphService.rebuild(document.getId())).isTrue();
 
-        MvcResult result = mockMvc.perform(get("/api/v1/knowledge-graph")
+        MvcResult result = mockMvc.perform(get("/api/v1/knowledge-graph/entities")
                 .cookie(session)
                 .param("documentId", document.getId().toString()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.scope").value("DOCUMENT"))
-            .andExpect(jsonPath("$.status").value("READY"))
-            .andExpect(jsonPath("$.documentName").value("annual-report.pdf"))
-            .andExpect(jsonPath("$.generatedAt").isNotEmpty())
             .andReturn();
 
-        JsonNode graph = objectMapper.readTree(result.getResponse().getContentAsString());
-        assertThat(graph.get("entityCount").asLong()).isGreaterThanOrEqualTo(5);
-        assertThat(graph.get("relationCount").asLong()).isGreaterThanOrEqualTo(1);
-        assertThat(graph.get("nodes").isArray()).isTrue();
+        JsonNode index = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(index.get("totalEntities").asInt()).isGreaterThanOrEqualTo(5);
 
         List<String> names = new java.util.ArrayList<>();
-        graph.get("nodes").forEach(node -> names.add(node.get("name").asText()));
+        index.get("entities").forEach(item -> names.add(item.get("name").asText()));
         assertThat(names).contains("Alpha Corp", "Beta Systems", "Project Orion");
 
-        JsonNode edge = graph.at("/edges/0");
-        assertThat(edge.get("relationType").asText()).isEqualTo("CO_OCCURS");
-        assertThat(edge.get("weight").asInt()).isGreaterThanOrEqualTo(1);
-        assertThat(edge.get("source").asText()).isNotBlank();
-        assertThat(edge.get("target").asText()).isNotBlank();
-
         // The summary model's type must win over the pattern fallback.
-        JsonNode beta = findNode(graph, "Beta Systems");
-        assertThat(beta).as("Beta Systems node").isNotNull();
+        JsonNode beta = findEntity(index, "Beta Systems");
+        assertThat(beta).as("Beta Systems row").isNotNull();
         assertThat(beta.get("type").asText()).isEqualTo("ORGANIZATION");
+        assertThat(beta.get("evidenceExcerpt").asText()).isNotBlank();
 
         // Type filter returns only that type.
-        MvcResult filtered = mockMvc.perform(get("/api/v1/knowledge-graph")
+        MvcResult filtered = mockMvc.perform(get("/api/v1/knowledge-graph/entities")
                 .cookie(session)
                 .param("documentId", document.getId().toString())
                 .param("type", "ORGANIZATION"))
             .andExpect(status().isOk())
             .andReturn();
-        JsonNode filteredGraph = objectMapper.readTree(filtered.getResponse().getContentAsString());
-        assertThat(filteredGraph.get("nodes").size()).isGreaterThanOrEqualTo(2);
-        filteredGraph.get("nodes").forEach(node ->
-            assertThat(node.get("type").asText()).isEqualTo("ORGANIZATION"));
+        JsonNode filteredIndex = objectMapper.readTree(filtered.getResponse().getContentAsString());
+        assertThat(filteredIndex.get("entities").size()).isGreaterThanOrEqualTo(2);
+        filteredIndex.get("entities").forEach(item ->
+            assertThat(item.get("type").asText()).isEqualTo("ORGANIZATION"));
     }
 
     @Test
-    void knowledgeGraphIsOwnershipScoped() throws Exception {
+    void entityIndexIsOwnershipScoped() throws Exception {
         String ownerEmail = uniqueEmail();
         Cookie ownerSession = register(ownerEmail);
-        Csrf ownerCsrf = csrf(ownerSession);
         Document owned = document(user(ownerEmail), "private-graph.pdf");
         chunk(owned, 0, 1, "Secret Project Falcon was discussed by Acme Corp in 2025.");
-
-        mockMvc.perform(post("/api/v1/knowledge-graph/rebuild")
-                .cookie(ownerSession, ownerCsrf.cookie())
-                .header("X-XSRF-TOKEN", ownerCsrf.token())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"documentIds\":[\"" + owned.getId() + "\"]}"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.rebuilt").value(1));
+        assertThat(knowledgeGraphService.rebuild(owned.getId())).isTrue();
 
         String intruderEmail = uniqueEmail();
         Cookie intruderSession = register(intruderEmail);
 
-        mockMvc.perform(get("/api/v1/knowledge-graph")
+        mockMvc.perform(get("/api/v1/knowledge-graph/entities")
                 .cookie(intruderSession)
                 .param("documentId", owned.getId().toString()))
             .andExpect(status().isNotFound());
 
-        MvcResult library = mockMvc.perform(get("/api/v1/knowledge-graph").cookie(intruderSession))
+        MvcResult library = mockMvc.perform(get("/api/v1/knowledge-graph/entities").cookie(intruderSession))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.scope").value("LIBRARY"))
             .andReturn();
-        JsonNode graph = objectMapper.readTree(library.getResponse().getContentAsString());
-        assertThat(graph.get("entityCount").asLong()).isZero();
-        assertThat(graph.get("nodes").size()).isZero();
+        JsonNode index = objectMapper.readTree(library.getResponse().getContentAsString());
+        assertThat(index.get("totalEntities").asInt()).isZero();
+        assertThat(index.get("entities").size()).isZero();
+
+        assertThat(ownerSession).isNotNull();
     }
 
     @Test
-    void knowledgeGraphRejectsUnknownEntityType() throws Exception {
+    void entityIndexRejectsUnknownEntityType() throws Exception {
         String email = uniqueEmail();
         Cookie session = register(email);
 
-        mockMvc.perform(get("/api/v1/knowledge-graph")
+        mockMvc.perform(get("/api/v1/knowledge-graph/entities")
                 .cookie(session)
                 .param("type", "BANANA"))
             .andExpect(status().isBadRequest());
@@ -521,10 +498,10 @@ class IntelligencePagesIntegrationTest {
     // JSON helpers
     // ------------------------------------------------------------------
 
-    private static JsonNode findNode(JsonNode graph, String name) {
-        for (JsonNode node : graph.get("nodes")) {
-            if (name.equals(node.get("name").asText())) {
-                return node;
+    private static JsonNode findEntity(JsonNode index, String name) {
+        for (JsonNode item : index.get("entities")) {
+            if (name.equals(item.get("name").asText())) {
+                return item;
             }
         }
         return null;

@@ -197,53 +197,49 @@ Semantics:
 
 ---
 
-## Knowledge graph — `/knowledge-graph` (Phase 3)
+## Entities and document connections — `/knowledge-graph` (Phase 3)
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/knowledge-graph` | Graph for the user's library, or one document via `documentId`. Filters: `type`, `q`, `limit` (1–300, default 120) |
-| POST | `/knowledge-graph/rebuild` | `{ documentIds?: [...] }` — rebuilds those documents, or up to 10 of the user's READY documents when omitted. CSRF required |
+| GET | `/knowledge-graph/entities` | Merged entity index: one row per normalized name with the documents that mention it. Filters: `documentId`, `type`, `q`, `limit` (1–200, default 50) |
+| GET | `/knowledge-graph/connections` | Document pairs that mention the same entities (`limit` 1–50, default 12) |
 
 ```jsonc
+// GET /knowledge-graph/entities?documentId=…
 {
-  "documentId": "…",              // null for a library-wide graph
-  "documentName": "report.pdf",   // null for a library-wide graph
-  "scope": "DOCUMENT",            // DOCUMENT | LIBRARY
-  "status": "READY",              // NONE | PENDING | READY | FAILED (document scope)
-  "error": null,
-  "generatedAt": "…",
-  "entityCount": 42,
-  "relationCount": 118,
-  "documentCount": 1,
-  "returnedEntities": 42,
-  "truncated": false,
-  "nodes": [{
-    "id": "…", "name": "Alpha Corp", "type": "ORGANIZATION",
-    "mentionCount": 7, "documentId": "…", "documentName": "report.pdf",
-    "firstPage": 3, "evidenceExcerpt": "…"
-  }],
-  "edges": [{
-    "id": "…", "source": "…", "target": "…",
-    "relationType": "CO_OCCURS", "weight": 4,
-    "documentId": "…", "firstPage": 3, "evidenceExcerpt": "…"
+  "totalEntities": 42, "returnedEntities": 42, "truncated": false,
+  "entities": [{
+    "normalizedName": "alpha corp", "name": "Alpha Corp", "type": "ORGANIZATION",
+    "mentionCount": 7, "documentCount": 1,
+    "evidenceExcerpt": "…",
+    "documents": [{ "id": "…", "name": "report.pdf", "mentionCount": 7, "firstPage": 3 }]
+  }]
+}
+
+// GET /knowledge-graph/connections
+{
+  "documentCount": 3, "pairCount": 2, "truncated": false,
+  "connections": [{
+    "documentAId": "…", "documentAName": "a.pdf",
+    "documentBId": "…", "documentBName": "b.pdf",
+    "sharedEntities": 6, "sampleEntities": ["Alpha Corp", "Project Orion"]
   }]
 }
 ```
 
 Semantics:
 
-- **PostgreSQL only.** No external graph database; entities and relations live
-  in `knowledge_entities` / `knowledge_relations` (V6).
+- **PostgreSQL only.** No external graph database; entities live in
+  `knowledge_entities`. The old co-occurrence `knowledge_relations` table is
+  dropped in V9 and document connections are now derived at read time.
 - **Deterministic extraction.** Dates, metrics, acronyms, proper nouns and
-  CamelCase names are extracted with regexes; the summary model's `ENTITIES`
-  section is merged in when present to improve entity *types*. No model call is
-  made to build a graph.
-- **`CO_OCCURS` is not a fact.** An edge means both entities were mentioned in
-  the same chunk; `weight` is the number of such passages. The API and UI say so
-  explicitly, and every node/edge carries an evidence excerpt and first page.
-- Extraction is bounded (150 entities / 1500 relations per document, 300 nodes /
-  4000 edges per response) and runs synchronously after document processing,
-  after summaries complete, and via a bounded asynchronous startup backfill.
+  CamelCase names are extracted with regexes; if an `ENTITIES` summary section
+  exists when extraction runs, its typed names are merged on top. No model call
+  is made to build the index.
+- **Connections are about subjects, not dates.** A bare year, a two-letter
+  acronym or a generic label (“details”, “customer”) never creates a pair.
+- Extraction is bounded (150 entities per document) and runs when a document
+  becomes READY, plus a bounded asynchronous startup backfill.
 - All reads are ownership-scoped; a foreign `documentId` returns **404**.
 
 ---

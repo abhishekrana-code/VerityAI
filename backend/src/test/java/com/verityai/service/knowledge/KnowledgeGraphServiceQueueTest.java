@@ -5,7 +5,6 @@ import com.verityai.repository.DocumentChunkRepository;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.DocumentSummaryRepository;
 import com.verityai.repository.KnowledgeEntityRepository;
-import com.verityai.repository.KnowledgeRelationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -36,14 +35,13 @@ class KnowledgeGraphServiceQueueTest {
     @Mock private DocumentChunkRepository chunkRepository;
     @Mock private DocumentSummaryRepository summaryRepository;
     @Mock private KnowledgeEntityRepository entityRepository;
-    @Mock private KnowledgeRelationRepository relationRepository;
     @Mock private TransactionTemplate transactionTemplate;
 
     @Test
     void backfill_whenQueueIsFull_marksDocumentPendingForBackfill() throws Exception {
         KnowledgeGraphService service = new KnowledgeGraphService(
             documentRepository, chunkRepository, summaryRepository,
-            entityRepository, relationRepository, transactionTemplate);
+            entityRepository, transactionTemplate);
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "queueCapacity", 1);
         ReflectionTestUtils.setField(service, "backfillLimit", 10);
