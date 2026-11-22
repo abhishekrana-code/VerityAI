@@ -3,6 +3,8 @@ package com.verityai.controller;
 import com.verityai.dto.request.RebuildKnowledgeGraphRequest;
 import com.verityai.dto.response.KnowledgeGraphRebuildResponse;
 import com.verityai.dto.response.KnowledgeGraphResponse;
+import com.verityai.dto.response.KnowledgeConnectionsResponse;
+import com.verityai.dto.response.KnowledgeEntityIndexResponse;
 import com.verityai.entity.User;
 import com.verityai.security.CurrentUser;
 import com.verityai.service.knowledge.KnowledgeGraphService;
@@ -39,6 +41,29 @@ public class KnowledgeGraphController {
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "120") @Min(1) @Max(300) int limit) {
         return ResponseEntity.ok(knowledgeGraphService.graph(user, documentId, type, q, limit));
+    }
+
+    /**
+     * Merged entity index: one row per normalized name, with every document that
+     * mentions it. This is the readable replacement for repeating an entity once
+     * per document in the canvas.
+     */
+    @GetMapping("/entities")
+    public ResponseEntity<KnowledgeEntityIndexResponse> entities(
+            @CurrentUser User user,
+            @RequestParam(required = false) UUID documentId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
+        return ResponseEntity.ok(knowledgeGraphService.entityIndex(user, documentId, type, q, limit));
+    }
+
+    /** Document pairs that mention the same entities (doc-document connections). */
+    @GetMapping("/connections")
+    public ResponseEntity<KnowledgeConnectionsResponse> connections(
+            @CurrentUser User user,
+            @RequestParam(defaultValue = "12") @Min(1) @Max(50) int limit) {
+        return ResponseEntity.ok(knowledgeGraphService.connections(user, limit));
     }
 
     @PostMapping("/rebuild")

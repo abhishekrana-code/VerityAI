@@ -45,17 +45,17 @@ const FILTERS: Array<{ value: string; label: string }> = [
 ];
 
 const SUPPORT_STYLES: Record<SupportClass, { label: string; className: string }> = {
-  SUPPORTED: { label: 'Supported', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300' },
-  PARTIALLY_SUPPORTED: { label: 'Partially supported', className: 'border-amber-400/25 bg-amber-500/10 text-amber-300' },
-  UNSUPPORTED: { label: 'Unsupported', className: 'border-rose-400/25 bg-rose-500/10 text-rose-300' },
-  CONFLICTING: { label: 'Conflicting', className: 'border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-300' },
+  SUPPORTED: { label: 'Supported', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  PARTIALLY_SUPPORTED: { label: 'Partially supported', className: 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  UNSUPPORTED: { label: 'Unsupported', className: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
+  CONFLICTING: { label: 'Conflicting', className: 'border-primary/25 bg-primary/10 text-primary' },
 };
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   NOT_REQUESTED: { label: 'Not verified', className: 'border-border/80 bg-muted/60 text-muted-foreground' },
-  PARTIAL: { label: 'Partial', className: 'border-amber-400/25 bg-amber-500/10 text-amber-300' },
-  COMPLETED: { label: 'Verified', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300' },
-  FAILED: { label: 'Failed', className: 'border-rose-400/25 bg-rose-500/10 text-rose-300' },
+  PARTIAL: { label: 'Partial', className: 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  COMPLETED: { label: 'Verified', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  FAILED: { label: 'Failed', className: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
 };
 
 export function VerificationPage() {
@@ -119,8 +119,7 @@ export function VerificationPage() {
 
   return (
     <div className="space-y-6">
-      <section className="relative isolate overflow-hidden rounded-[26px] border border-emerald-400/15 bg-gradient-to-br from-emerald-500/[0.12] via-card to-indigo-500/[0.08] p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 -z-10 h-64 w-64 rounded-full bg-emerald-500/10 blur-[90px]" />
+      <section className="page-hero">
         <p className="eyebrow">Verification</p>
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Check every claim against its evidence</h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
@@ -143,7 +142,7 @@ export function VerificationPage() {
           className={cn(
             'inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold transition',
             view === 'verification'
-              ? 'border-indigo-400 text-foreground'
+              ? 'border-primary text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
@@ -158,7 +157,7 @@ export function VerificationPage() {
           className={cn(
             'inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-semibold transition',
             view === 'contradictions'
-              ? 'border-fuchsia-400 text-foreground'
+              ? 'border-primary text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
@@ -182,9 +181,9 @@ export function VerificationPage() {
       {stats && (
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatCard label="Answers" value={stats.total} hint="assistant responses" />
-          <StatCard label="Verified" value={stats.verified} hint="at least one stored claim" accent="text-emerald-300" />
-          <StatCard label="Completed" value={stats.completed} hint="every analyzed claim classified" accent="text-indigo-300" />
-          <StatCard label="Partial" value={stats.partial} hint="some claims unclassified" accent="text-amber-300" />
+          <StatCard label="Verified" value={stats.verified} hint="at least one stored claim" accent="text-emerald-700 dark:text-emerald-300" />
+          <StatCard label="Completed" value={stats.completed} hint="every analyzed claim classified" accent="text-primary" />
+          <StatCard label="Partial" value={stats.partial} hint="some claims unclassified" accent="text-amber-700 dark:text-amber-300" />
           <StatCard label="Not verified" value={stats.unverified} hint="no stored verification" accent="text-muted-foreground" />
         </section>
       )}
@@ -200,7 +199,7 @@ export function VerificationPage() {
             className={cn(
               'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition',
               filter === option.value
-                ? 'border-indigo-400/30 bg-indigo-500/15 text-indigo-200'
+                ? 'border-primary/30 bg-primary/15 text-primary'
                 : 'border-border/80 bg-card/60 text-muted-foreground hover:bg-accent hover:text-foreground'
             )}
           >
@@ -303,7 +302,7 @@ function VerificationCard({
             {item.conversationTitle && (
               <Link
                 to={`/dashboard/workspace/${item.conversationId}`}
-                className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold hover:text-indigo-300"
+                className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold hover:text-primary"
               >
                 <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="truncate">{item.conversationTitle}</span>
@@ -361,7 +360,7 @@ function VerificationCard({
           citations <strong className="text-foreground/90 tabular-nums">{item.citationCount}</strong>
         </span>
         {item.invalidReferenceCount > 0 && (
-          <span className="inline-flex items-center gap-1 text-rose-300">
+          <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
             <AlertTriangle className="h-3 w-3" aria-hidden="true" />
             {item.invalidReferenceCount} invalid reference{item.invalidReferenceCount === 1 ? '' : 's'}
           </span>

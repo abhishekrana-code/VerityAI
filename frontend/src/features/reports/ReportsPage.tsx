@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, type ReportItem, type ReportListResponse } from '@/lib/api';
-import { cn, isDeferredStatus } from '@/lib/utils';
+import { cn, isDeferredStatus, pluralize } from '@/lib/utils';
 import {
   PageEmpty,
   PageError,
@@ -36,9 +36,9 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 ];
 
 const STATUS_STYLES: Record<string, string> = {
-  READY: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300',
-  PENDING: 'border-indigo-400/25 bg-indigo-500/10 text-indigo-300',
-  FAILED: 'border-rose-400/25 bg-rose-500/10 text-rose-300',
+  READY: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  PENDING: 'border-primary/25 bg-primary/10 text-primary',
+  FAILED: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300',
   NONE: 'border-border/80 bg-muted/60 text-muted-foreground',
 };
 
@@ -86,8 +86,7 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="relative isolate overflow-hidden rounded-[26px] border border-indigo-400/15 bg-gradient-to-br from-indigo-500/[0.14] via-card to-cyan-500/[0.08] p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 -z-10 h-64 w-64 rounded-full bg-cyan-500/10 blur-[90px]" />
+      <section className="page-hero">
         <p className="eyebrow">Reports</p>
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Structured briefs from your documents</h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
@@ -142,7 +141,7 @@ export function ReportsPage() {
               className={cn(
                 'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
                 status === option.value
-                  ? 'border-indigo-400/30 bg-indigo-500/15 text-indigo-200'
+                  ? 'border-primary/30 bg-primary/15 text-primary'
                   : 'border-border/80 bg-card/60 text-muted-foreground hover:bg-accent hover:text-foreground'
               )}
             >
@@ -214,19 +213,19 @@ function ReportCard({ report }: { report: ReportItem }) {
   // the next backend start, so it must not be labelled or animated as progress.
   const deferred = isDeferredStatus(report.summaryStatus, report.summaryError);
   const statusClass = deferred
-    ? 'border-amber-400/25 bg-amber-500/10 text-amber-300'
+    ? 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
     : STATUS_STYLES[report.summaryStatus] ?? STATUS_STYLES.NONE;
 
   return (
-    <li className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm transition hover:border-indigo-400/25">
+    <li className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm transition hover:border-primary/25">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Link
               to={`/dashboard/documents/${report.documentId}`}
-              className="inline-flex min-w-0 items-center gap-1.5 text-base font-bold hover:text-indigo-300"
+              className="inline-flex min-w-0 items-center gap-1.5 text-base font-bold hover:text-primary"
             >
-              <FileText className="h-4 w-4 shrink-0 text-indigo-300" aria-hidden="true" />
+              <FileText className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <span className="truncate">{report.documentName}</span>
             </Link>
             <span className={cn('inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-semibold', statusClass)}>
@@ -242,7 +241,7 @@ function ReportCard({ report }: { report: ReportItem }) {
             </span>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {report.pageCount != null ? `${report.pageCount} pages · ` : ''}
+            {report.pageCount != null ? `${pluralize(report.pageCount, 'page')} · ` : ''}
             updated {formatDistanceToNow(new Date(report.updatedAt), { addSuffix: true })}
             {report.model ? ` · ${report.model}` : ''}
           </p>
@@ -258,18 +257,18 @@ function ReportCard({ report }: { report: ReportItem }) {
       </div>
 
       {report.summaryStatus === 'FAILED' && report.summaryError && (
-        <p className="mt-3 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+        <p className="mt-3 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
           {report.summaryError}
         </p>
       )}
 
       {deferred ? (
-        <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        <p className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
           <Clock className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />
           {report.summaryError}
         </p>
       ) : report.summaryStatus === 'PENDING' ? (
-        <p className="mt-3 inline-flex items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-500/5 px-3 py-2 text-xs text-indigo-200">
+        <p className="mt-3 inline-flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           Summaries are being generated. This page will show them once ready.
         </p>
@@ -299,8 +298,8 @@ function ReportCard({ report }: { report: ReportItem }) {
                   className={cn(
                     'mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
                     finding.type === 'FACT'
-                      ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'
-                      : 'border-amber-400/25 bg-amber-500/10 text-amber-300'
+                      ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                      : 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
                   )}
                 >
                   {finding.type === 'FACT' ? <FileText className="h-2.5 w-2.5" aria-hidden="true" /> : <Lightbulb className="h-2.5 w-2.5" aria-hidden="true" />}

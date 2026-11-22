@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Message, type MessageListResponse, type Conversation, type Document, type Citation, type ClaimVerificationResponse } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
-import { ArrowLeft, Send, Loader2, Copy, Check, AlertCircle, FileText, MoreVertical, Sparkles, Plus, X, ShieldCheck } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ArrowLeft, ArrowUpRight, Send, Loader2, Copy, Check, AlertCircle, FileText, MoreVertical, Sparkles, Plus, X, ShieldCheck } from 'lucide-react';
+import { cn, pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { Markdown } from '@/components/ui/Markdown';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
@@ -16,14 +16,24 @@ import { useToast } from '@/hooks/useToast';
 export function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [question, setQuestion] = useState('');
+  // A question can arrive from a document's suggested questions.
+  const [question, setQuestion] = useState(() => searchParams.get('q') ?? '');
   const [showSources, setShowSources] = useState<string | null>(null);
   const [showContextPicker, setShowContextPicker] = useState(false);
   const [pickerSelected, setPickerSelected] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ doc: PdfPreviewTarget; page: number } | null>(null);
   const [verifications, setVerifications] = useState<Record<string, ClaimVerificationResponse>>({});
+
+  // Consume the hand-off question so reloading the page starts empty again.
+  useEffect(() => {
+    if (!searchParams.get('q')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('q');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -212,7 +222,8 @@ export function ConversationPage() {
         <div className="flex-1 min-w-0">
           <h1 className="font-semibold truncate">{conversation.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {conversation.messageCount} messages • {conversation.documents.length} documents
+            {pluralize(conversation.messageCount, 'message')} •{' '}
+            {pluralize(conversation.documents.length, 'document')}
           </p>
         </div>
         <button className="p-2 rounded-lg hover:bg-accent" title="More options">
@@ -388,7 +399,7 @@ export function ConversationPage() {
                     <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
                     <span className="truncate">{doc.originalFilename}</span>
                     {doc.pageCount != null && (
-                      <span className="text-xs text-muted-foreground">({doc.pageCount} pages)</span>
+                      <span className="text-xs text-muted-foreground">({pluralize(doc.pageCount, 'page')})</span>
                     )}
                   </label>
                 ))
@@ -461,7 +472,7 @@ function MessageBubble({
       <div className={cn('flex-1 max-w-[85%]', isUser ? 'text-right' : '')}>
         <div className={cn(
           'inline-block rounded-2xl border px-4 py-3 shadow-sm',
-          isUser ? 'border-indigo-300/15 bg-primary text-primary-foreground rounded-tr-sm' : 'border-border/70 bg-card rounded-tl-sm'
+          isUser ? 'border-primary/15 bg-primary text-primary-foreground rounded-tr-sm' : 'border-border/70 bg-card rounded-tl-sm'
         )}>
           {isUser || message.citations.length === 0 ? (
             <Markdown>{message.content}</Markdown>
@@ -620,7 +631,7 @@ const SUPPORT_BADGES: Record<string, { label: string; className: string }> = {
   },
   CONFLICTING: {
     label: 'Conflicting',
-    className: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+    className: 'bg-primary text-primary dark:bg-primary/30 dark:text-primary',
   },
 };
 
@@ -652,13 +663,22 @@ function VerificationPanel({
           <ShieldCheck className="h-4 w-4 text-primary" />
           Claim verification
         </span>
-        <button
-          onClick={onReverify}
-          disabled={verifying}
-          className="text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
-        >
-          {verifying ? 'Re-running…' : 'Re-run'}
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/dashboard/verification"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            All results
+            <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+          </Link>
+          <button
+            onClick={onReverify}
+            disabled={verifying}
+            className="text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+          >
+            {verifying ? 'Re-running…' : 'Re-run'}
+          </button>
+        </div>
       </div>
 
       {/* Deterministic evidence coverage */}

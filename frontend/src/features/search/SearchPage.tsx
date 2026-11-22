@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   api,
@@ -10,7 +11,7 @@ import {
   type SearchStrategy,
 } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
-import { cn } from '@/lib/utils';
+import { cn, pluralize } from '@/lib/utils';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
 import { PageEmpty, PageError, PageLoading } from '@/components/ui/PageStates';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
@@ -20,9 +21,9 @@ import {
 } from 'lucide-react';
 
 const STRATEGY_LABELS: Record<SearchStrategy, { label: string; className: string }> = {
-  hybrid: { label: 'Hybrid', className: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
-  semantic: { label: 'Semantic', className: 'bg-violet-500/15 text-violet-300 border-violet-400/25' },
-  keyword: { label: 'Keyword', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+  hybrid: { label: 'Hybrid', className: 'bg-primary/15 text-primary border-primary/25' },
+  semantic: { label: 'Semantic', className: 'bg-primary/15 text-primary border-primary/25' },
+  keyword: { label: 'Keyword', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
 };
 
 export function SearchPage() {
@@ -65,8 +66,7 @@ export function SearchPage() {
 
   return (
     <div className="space-y-6">
-      <section className="relative isolate overflow-hidden rounded-[26px] border border-indigo-400/15 bg-gradient-to-br from-indigo-500/[0.14] via-card to-violet-500/[0.08] p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 -z-10 h-64 w-64 rounded-full bg-indigo-500/15 blur-[90px]" />
+      <section className="page-hero">
         <p className="eyebrow">Evidence search</p>
         <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Search your library</h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
@@ -101,7 +101,7 @@ export function SearchPage() {
             <button
               type="submit"
               disabled={!query.trim() || search.isPending}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-950/20 transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {search.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
               Search
@@ -152,7 +152,7 @@ export function SearchPage() {
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         <span className="min-w-0 flex-1 truncate">{document.originalFilename}</span>
                         {document.pageCount != null && (
-                          <span className="text-[11px] text-muted-foreground">{document.pageCount} pages</span>
+                          <span className="text-[11px] text-muted-foreground">{pluralize(document.pageCount, 'page')}</span>
                         )}
                       </label>
                     </li>
@@ -247,7 +247,7 @@ function SearchResultCard({ hit, query, onOpen }: { hit: SearchHit; query: strin
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
-              <FileText className="h-4 w-4 text-indigo-300" aria-hidden="true" />
+              <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
               {hit.documentName}
             </span>
             {hit.pageNumber != null && (
@@ -256,12 +256,12 @@ function SearchResultCard({ hit, query, onOpen }: { hit: SearchHit; query: strin
               </span>
             )}
             {hit.keywordMatch && (
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                 keyword
               </span>
             )}
             {hit.semanticMatch && (
-              <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+              <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
                 semantic
               </span>
             )}
@@ -270,13 +270,21 @@ function SearchResultCard({ hit, query, onOpen }: { hit: SearchHit; query: strin
             <Highlighted text={hit.excerpt || hit.content} query={query} />
           </p>
         </div>
-        <button
-          onClick={onOpen}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground"
-        >
-          Open source
-          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to={`/dashboard/documents/${hit.documentId}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          >
+            Open document
+          </Link>
+          <button
+            onClick={onOpen}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          >
+            Open source
+            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
         <span>relevance {hit.rank.toFixed(3)}</span>
@@ -307,7 +315,7 @@ function Highlighted({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, index) =>
         part.match ? (
-          <mark key={index} className="rounded bg-indigo-400/20 px-0.5 text-foreground">{part.text}</mark>
+          <mark key={index} className="rounded bg-primary/20 px-0.5 text-foreground">{part.text}</mark>
         ) : (
           <span key={index}>{part.text}</span>
         ))}

@@ -38,7 +38,6 @@ export function LoginPage() {
 
   return (
     <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-12">
-      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-500/10 blur-[100px]" />
       <main id="main-content" tabIndex={-1} className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center"><Logo to="/" /></div>
@@ -51,7 +50,7 @@ export function LoginPage() {
             <div
               role="status"
               aria-live="polite"
-              className="flex items-center gap-2 rounded-lg bg-emerald-400/10 p-4 text-sm text-emerald-300"
+              className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:text-emerald-300"
             >
               <CheckCircle2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
               <p>Account created. Sign in to start researching.</p>
@@ -77,7 +76,7 @@ export function LoginPage() {
               autoComplete="email"
               {...registerField('email')}
               className={cn(
-                'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+                'flex h-10 w-full rounded-full border border-input bg-card px-4 py-2 text-sm ring-offset-background',
                 'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 errors.email && 'border-destructive focus-visible:ring-destructive'
@@ -110,7 +109,7 @@ export function LoginPage() {
               autoComplete="current-password"
               {...registerField('password')}
               className={cn(
-                'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+                'flex h-10 w-full rounded-full border border-input bg-card px-4 py-2 text-sm ring-offset-background',
                 'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 errors.password && 'border-destructive focus-visible:ring-destructive'

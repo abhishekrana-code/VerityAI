@@ -303,6 +303,10 @@ Two supported paths, both documented in **[docs/deployment.md](docs/deployment.m
 2. **Host services:** systemd jar + host nginx (the original runbook), with
    Postgres still in Docker.
 
+For quick temporary access from another device, **[docs/tailscale.md](docs/tailscale.md)**
+publishes the Compose stack through Tailscale Funnel on port 8443 (public
+internet exposure; `tailscale serve` keeps it tailnet-only).
+
 Key production settings:
 - `SERVER_SERVLET_SESSION_COOKIE_SECURE=true` (HTTPS)
 - `APP_BASE_URL` and `CORS_ALLOWED_ORIGINS` set to the public origin

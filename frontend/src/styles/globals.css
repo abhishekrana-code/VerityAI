@@ -1,113 +1,139 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * AnswerThis-inspired design tokens.
+ * Crisp white surfaces, near-black editorial type, a restrained rose accent
+ * (#a53e5a) and a cool gray for supporting copy. Flat cards, thin borders,
+ * small radii and generous whitespace instead of shadows.
+ */
 @layer base {
   :root {
-    color-scheme: dark;
-    --background: 224 42% 7%;
-    --foreground: 220 25% 94%;
-    --card: 222 34% 10%;
-    --card-foreground: 220 25% 94%;
-    --popover: 222 34% 10%;
-    --popover-foreground: 220 25% 94%;
-    --primary: 231 94% 70%;
-    --primary-foreground: 225 50% 10%;
-    --secondary: 220 25% 16%;
-    --secondary-foreground: 220 25% 92%;
-    --muted: 220 25% 14%;
-    --muted-foreground: 218 14% 62%;
-    --accent: 222 25% 17%;
-    --accent-foreground: 220 25% 95%;
-    --destructive: 0 68% 56%;
+    color-scheme: light;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+    --primary: 344 45% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 18%;
+    --muted: 210 40% 98%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 340 45% 95%;
+    --accent-foreground: 344 48% 33%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 23% 19%;
-    --input: 220 23% 21%;
-    --ring: 231 94% 70%;
-    --radius: 0.85rem;
-    --font-sans: 'Inter', system-ui, sans-serif;
-    --font-display: 'Inter', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-  }
-
-  .dark {
-    color-scheme: dark;
-    --background: 224 42% 7%;
-    --foreground: 220 25% 94%;
-    --card: 222 34% 10%;
-    --card-foreground: 220 25% 94%;
-    --popover: 222 34% 10%;
-    --popover-foreground: 220 25% 94%;
-    --primary: 231 94% 70%;
-    --primary-foreground: 225 50% 10%;
-    --secondary: 220 25% 16%;
-    --secondary-foreground: 220 25% 92%;
-    --muted: 220 25% 14%;
-    --muted-foreground: 218 14% 62%;
-    --accent: 222 25% 17%;
-    --accent-foreground: 220 25% 95%;
-    --destructive: 0 68% 56%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 23% 19%;
-    --input: 220 23% 21%;
-    --ring: 231 94% 70%;
+    --border: 220 13% 91%;
+    --input: 220 13% 88%;
+    --ring: 344 45% 45%;
+    --radius: 0.5rem;
+    --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-display: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
   }
 
   .light {
     color-scheme: light;
-    --background: 220 33% 98%;
-    --foreground: 224 35% 12%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
     --card: 0 0% 100%;
-    --card-foreground: 224 35% 12%;
+    --card-foreground: 0 0% 7%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 35% 12%;
-    --primary: 231 82% 58%;
+    --popover-foreground: 0 0% 7%;
+    --primary: 344 45% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 24% 94%;
-    --secondary-foreground: 224 35% 15%;
-    --muted: 220 24% 94%;
-    --muted-foreground: 218 12% 43%;
-    --accent: 220 24% 93%;
-    --accent-foreground: 224 35% 15%;
-    --destructive: 0 70% 52%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 18%;
+    --muted: 210 40% 98%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 340 45% 95%;
+    --accent-foreground: 344 48% 33%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 18% 87%;
-    --input: 220 18% 85%;
-    --ring: 231 82% 58%;
+    --border: 220 13% 91%;
+    --input: 220 13% 88%;
+    --ring: 344 45% 45%;
+  }
+
+  /* Dark mode keeps the same rose accent on warm-neutral graphite surfaces. */
+  .dark {
+    color-scheme: dark;
+    --background: 240 6% 7%;
+    --foreground: 240 5% 95%;
+    --card: 240 5% 10%;
+    --card-foreground: 240 5% 95%;
+    --popover: 240 5% 10%;
+    --popover-foreground: 240 5% 95%;
+    --primary: 344 55% 62%;
+    --primary-foreground: 344 45% 10%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 240 5% 92%;
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 64%;
+    --accent: 344 25% 17%;
+    --accent-foreground: 344 60% 88%;
+    --destructive: 0 62% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 5% 18%;
+    --input: 240 5% 21%;
+    --ring: 344 55% 62%;
   }
 
   * { @apply border-border; }
   html { scroll-behavior: smooth; }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
-    background-image: radial-gradient(ellipse at 12% 0%, hsl(231 75% 22% / 0.14), transparent 34%),
-      radial-gradient(ellipse at 88% 12%, hsl(258 75% 25% / 0.10), transparent 30%);
+    font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
+    background-image: radial-gradient(ellipse at 50% -12%, hsl(var(--primary) / 0.05), transparent 55%);
     min-width: 320px;
   }
-  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.035em; }
+  .dark body {
+    background-image: radial-gradient(ellipse at 50% -12%, hsl(var(--primary) / 0.10), transparent 55%);
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.03em; }
   button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
-  ::selection { background: hsl(231 94% 70% / 0.28); }
+  ::selection { background: hsl(var(--primary) / 0.16); }
 }
 
 @layer components {
+  /* Low-elevation card: white, 1px border, small radius, no heavy shadow. */
   .surface-card {
-    @apply rounded-2xl border bg-card shadow-sm;
-    box-shadow: 0 12px 36px hsl(224 55% 3% / 0.12), inset 0 1px 0 hsl(0 0% 100% / 0.025);
+    @apply rounded-xl border bg-card;
+    box-shadow: 0 1px 2px hsl(220 43% 11% / 0.04);
   }
   .eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+    @apply text-xs font-medium text-muted-foreground;
   }
   .page-heading {
-    @apply text-3xl font-bold tracking-tight sm:text-[2rem];
+    @apply text-[1.75rem] font-semibold tracking-[-0.03em] sm:text-[2rem];
+  }
+  /* Shared page header used by every feature screen. */
+  .page-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--border));
+    background:
+      radial-gradient(ellipse at 100% 0%, hsl(var(--primary) / 0.07), transparent 46%),
+      radial-gradient(ellipse at 0% 100%, hsl(var(--primary) / 0.03), transparent 40%),
+      hsl(var(--card));
+    padding: 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .page-hero { padding: 2rem; }
   }
   .premium-input {
-    @apply rounded-xl border border-input bg-background/80 text-foreground shadow-inner outline-none transition;
+    @apply rounded-lg border border-input bg-card text-foreground outline-none transition;
   }
   .premium-input:focus {
-    border-color: hsl(var(--ring) / 0.8);
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.13);
+    border-color: hsl(var(--ring) / 0.65);
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.10);
   }
   .skip-link {
     position: fixed;
@@ -115,13 +141,12 @@
     left: 0.75rem;
     z-index: 100;
     transform: translateY(-200%);
-    border-radius: 0.75rem;
+    border-radius: 0.5rem;
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     padding: 0.625rem 1rem;
     font-size: 0.875rem;
-    font-weight: 600;
-    box-shadow: 0 10px 30px hsl(224 55% 3% / 0.35);
+    font-weight: 500;
     transition: transform 150ms ease;
   }
   .skip-link:focus {
@@ -134,18 +159,18 @@
 @layer utilities {
   .text-balance { text-wrap: balance; }
   .glass-panel {
-    background: hsl(var(--card) / 0.76);
+    background: hsl(var(--card) / 0.82);
     backdrop-filter: blur(18px);
   }
   .subtle-grid {
-    background-image: linear-gradient(hsl(var(--border) / 0.32) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border) / 0.32) 1px, transparent 1px);
-    background-size: 36px 36px;
+    background-image: linear-gradient(hsl(var(--border) / 0.55) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.55) 1px, transparent 1px);
+    background-size: 40px 40px;
     mask-image: linear-gradient(to bottom, black, transparent 85%);
   }
 }
 
-/* Consistent premium treatment for existing feature pages. */
+/* Consistent, restrained treatment for existing feature pages. */
 #root main input:not([type='checkbox']):not([type='radio']),
 #root main textarea,
 #root form input:not([type='checkbox']):not([type='radio']) {
@@ -157,11 +182,11 @@
 #root main button:focus-visible,
 #root aside button:focus-visible,
 #root aside a:focus-visible {
-  outline: 2px solid hsl(var(--ring) / 0.85);
+  outline: 2px solid hsl(var(--ring) / 0.75);
   outline-offset: 2px;
 }
 #root main .rounded-xl.border,
-#root main .rounded-2xl.border { box-shadow: 0 10px 30px hsl(224 55% 3% / 0.10); }
+#root main .rounded-2xl.border { box-shadow: 0 1px 2px hsl(220 43% 11% / 0.04); }
 #root main button { transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
 #root main button:active { transform: translateY(1px); }
 

@@ -21,8 +21,7 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'dark',
-  enableSystem = true,
+  defaultTheme = 'light',
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState<Theme>(defaultTheme);
   const [mounted, setMounted] = React.useState(false);
@@ -30,12 +29,8 @@ export function ThemeProvider({
   React.useEffect(() => {
     setMounted(true);
     const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored) {
-      setTheme(stored);
-    } else if (enableSystem && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
-    }
-  }, [enableSystem]);
+    setTheme(stored ?? defaultTheme);
+  }, [defaultTheme]);
 
   React.useEffect(() => {
     if (!mounted) return;

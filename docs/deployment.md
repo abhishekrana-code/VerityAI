@@ -191,6 +191,13 @@ Then set `SERVER_SERVLET_SESSION_COOKIE_SECURE=true`, `APP_BASE_URL` and
 > Only do this if port 8080 is not reachable except from the local tunnel —
 > otherwise a client could spoof `CF-Connecting-IP`.
 
+### Tailscale Funnel (temporary alternative)
+
+If you only need access for yourself for now, `tailscale funnel` publishes the
+Compose stack on port 8443 with no domain or certificate setup. See
+[`tailscale.md`](./tailscale.md) — note that Funnel is **public internet
+exposure**, and `tailscale serve` keeps it tailnet-only instead.
+
 ## A7. Updates and rollback
 
 ```bash

@@ -38,7 +38,6 @@ export function ResetPasswordPage() {
 
   return (
     <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-12">
-      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-500/10 blur-[100px]" />
       <main id="main-content" className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center"><Logo to="/" /></div>
@@ -108,7 +107,7 @@ export function ResetPasswordPage() {
                 autoFocus
                 {...register('password')}
                 className={cn(
-                  'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+                  'flex h-10 w-full rounded-full border border-input bg-card px-4 py-2 text-sm ring-offset-background',
                   'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   errors.password && 'border-destructive focus-visible:ring-destructive'
@@ -133,7 +132,7 @@ export function ResetPasswordPage() {
                 autoComplete="new-password"
                 {...register('confirmPassword')}
                 className={cn(
-                  'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+                  'flex h-10 w-full rounded-full border border-input bg-card px-4 py-2 text-sm ring-offset-background',
                   'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   errors.confirmPassword && 'border-destructive focus-visible:ring-destructive'

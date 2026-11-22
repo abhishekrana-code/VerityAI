@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.verityai.config.BoundedTaskQueue;
 import com.verityai.dto.response.KnowledgeGraphRebuildResponse;
 import com.verityai.dto.response.KnowledgeGraphResponse;
+import com.verityai.dto.response.KnowledgeConnectionsResponse;
+import com.verityai.dto.response.KnowledgeEntityIndexResponse;
 import com.verityai.entity.Document;
 import com.verityai.entity.DocumentChunk;
 import com.verityai.entity.DocumentSummary;
@@ -37,7 +39,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -434,6 +438,173 @@ public class KnowledgeGraphService {
             response.setEdges(relations.stream().map(this::toEdge).toList());
             return response;
         });
+    }
+
+    /**
+     * Merged entity index: one row per {@code normalizedName}, so "Alpha Corp"
+     * mentioned in three documents is one entry with three document references.
+     */
+    public KnowledgeEntityIndexResponse entityIndex(User user, UUID documentId, String type,
+                                                    String q, int limit) {
+        return transactionTemplate.execute(status -> {
+            if (documentId != null) {
+                documentRepository.findByIdAndUserIdAndDeletedAtIsNull(documentId, user.getId())
+                    .orElseThrow(() -> ApiException.notFound("Document not found"));
+            }
+            int effectiveLimit = Math.min(Math.max(limit, 1), 200);
+            // Rows are per document, so fetch more rows than output entries to
+            // fill the limit with merged entries rather than one per mention site.
+            int rowLimit = Math.min(Math.max(effectiveLimit * 5, 100), 2000);
+            EntityType entityType = parseType(type);
+
+            List<KnowledgeEntity> rows = entityRepository.findAll(
+                entitySpecification(user.getId(), documentId, entityType, q),
+                PageRequest.of(0, rowLimit, Sort.by(Sort.Direction.DESC, "mentionCount")
+                    .and(Sort.by(Sort.Direction.ASC, "name")))).getContent();
+
+            Map<String, List<KnowledgeEntity>> grouped = new LinkedHashMap<>();
+            for (KnowledgeEntity entity : rows) {
+                grouped.computeIfAbsent(entity.getNormalizedName(), key -> new ArrayList<>()).add(entity);
+            }
+
+            List<KnowledgeEntityIndexResponse.Item> items = new ArrayList<>();
+            for (List<KnowledgeEntity> group : grouped.values()) {
+                items.add(toIndexItem(group));
+            }
+            items.sort(Comparator.comparingInt(KnowledgeEntityIndexResponse.Item::getMentionCount)
+                .reversed()
+                .thenComparing(KnowledgeEntityIndexResponse.Item::getName, String.CASE_INSENSITIVE_ORDER));
+
+            boolean truncated = rows.size() >= rowLimit || items.size() > effectiveLimit;
+            if (items.size() > effectiveLimit) {
+                items = new ArrayList<>(items.subList(0, effectiveLimit));
+            }
+
+            boolean unfiltered = documentId == null && entityType == null && (q == null || q.isBlank());
+            KnowledgeEntityIndexResponse response = new KnowledgeEntityIndexResponse();
+            response.setTotalEntities(unfiltered
+                ? entityRepository.countDistinctNamesByUserId(user.getId())
+                : grouped.size());
+            response.setReturnedEntities(items.size());
+            response.setTruncated(truncated);
+            response.setEntities(items);
+            return response;
+        });
+    }
+
+    /** Document pairs that mention the same entity names. */
+    public KnowledgeConnectionsResponse connections(User user, int limit) {
+        return transactionTemplate.execute(status -> {
+            int pairLimit = Math.min(Math.max(limit, 1), 50);
+            int rowLimit = 5000;
+
+            List<KnowledgeEntity> rows = entityRepository.findAll(
+                (root, query, cb) -> {
+                    if (query != null && !Long.class.equals(query.getResultType())) {
+                        root.fetch("document", JoinType.LEFT);
+                    }
+                    return cb.equal(root.get("user").get("id"), user.getId());
+                },
+                PageRequest.of(0, rowLimit, Sort.by(Sort.Direction.DESC, "mentionCount"))).getContent();
+
+            Map<UUID, String> documentNames = new LinkedHashMap<>();
+            Map<String, Set<UUID>> documentsByName = new LinkedHashMap<>();
+            Map<String, String> displayNames = new LinkedHashMap<>();
+            for (KnowledgeEntity entity : rows) {
+                UUID docId = entity.getDocument().getId();
+                documentNames.putIfAbsent(docId, entity.getDocument().getOriginalFilename());
+                documentsByName.computeIfAbsent(entity.getNormalizedName(), key -> new LinkedHashSet<>()).add(docId);
+                displayNames.putIfAbsent(entity.getNormalizedName(), entity.getName());
+            }
+
+            Map<String, KnowledgeConnectionsResponse.Connection> pairs = new LinkedHashMap<>();
+            for (Map.Entry<String, Set<UUID>> entry : documentsByName.entrySet()) {
+                List<UUID> ids = new ArrayList<>(entry.getValue());
+                for (int i = 0; i < ids.size(); i++) {
+                    for (int j = i + 1; j < ids.size(); j++) {
+                        UUID a = ids.get(i);
+                        UUID b = ids.get(j);
+                        if (a.toString().compareTo(b.toString()) > 0) {
+                            UUID swap = a;
+                            a = b;
+                            b = swap;
+                        }
+                        String key = a + "|" + b;
+                        KnowledgeConnectionsResponse.Connection connection = pairs.get(key);
+                        if (connection == null) {
+                            // Bound a pathological library rather than build n^2 rows.
+                            if (pairs.size() >= 2000) {
+                                continue;
+                            }
+                            connection = new KnowledgeConnectionsResponse.Connection();
+                            connection.setDocumentAId(a);
+                            connection.setDocumentAName(documentNames.get(a));
+                            connection.setDocumentBId(b);
+                            connection.setDocumentBName(documentNames.get(b));
+                            connection.setSharedEntities(0);
+                            connection.setSampleEntities(new ArrayList<>());
+                            pairs.put(key, connection);
+                        }
+                        connection.setSharedEntities(connection.getSharedEntities() + 1);
+                        if (connection.getSampleEntities().size() < 5) {
+                            connection.getSampleEntities().add(displayNames.get(entry.getKey()));
+                        }
+                    }
+                }
+            }
+
+            List<KnowledgeConnectionsResponse.Connection> sorted = new ArrayList<>(pairs.values());
+            sorted.sort(Comparator
+                .comparingInt(KnowledgeConnectionsResponse.Connection::getSharedEntities).reversed()
+                .thenComparing(KnowledgeConnectionsResponse.Connection::getDocumentAName,
+                    Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
+            boolean truncated = rows.size() >= rowLimit || sorted.size() > pairLimit;
+
+            KnowledgeConnectionsResponse response = new KnowledgeConnectionsResponse();
+            response.setDocumentCount(documentNames.size());
+            response.setPairCount(sorted.size());
+            response.setTruncated(truncated);
+            response.setConnections(sorted.size() > pairLimit
+                ? new ArrayList<>(sorted.subList(0, pairLimit)) : sorted);
+            return response;
+        });
+    }
+
+    private KnowledgeEntityIndexResponse.Item toIndexItem(List<KnowledgeEntity> group) {
+        List<KnowledgeEntity> ordered = new ArrayList<>(group);
+        ordered.sort(Comparator.comparingInt(KnowledgeEntity::getMentionCount).reversed()
+            .thenComparing(KnowledgeEntity::getName, String.CASE_INSENSITIVE_ORDER));
+        KnowledgeEntity primary = ordered.get(0);
+
+        Map<UUID, KnowledgeEntityIndexResponse.DocumentRef> documents = new LinkedHashMap<>();
+        int mentions = 0;
+        for (KnowledgeEntity entity : ordered) {
+            mentions += entity.getMentionCount();
+            UUID documentId = entity.getDocument().getId();
+            KnowledgeEntityIndexResponse.DocumentRef ref = documents.get(documentId);
+            if (ref == null) {
+                ref = new KnowledgeEntityIndexResponse.DocumentRef();
+                ref.setId(documentId);
+                ref.setName(entity.getDocument().getOriginalFilename());
+                ref.setMentionCount(0);
+                ref.setFirstPage(entity.getFirstPage());
+                documents.put(documentId, ref);
+            }
+            ref.setMentionCount(ref.getMentionCount() + entity.getMentionCount());
+            if (entity.getFirstPage() != null
+                    && (ref.getFirstPage() == null || entity.getFirstPage() < ref.getFirstPage())) {
+                ref.setFirstPage(entity.getFirstPage());
+            }
+        }
+
+        KnowledgeEntityIndexResponse.Item item = new KnowledgeEntityIndexResponse.Item();
+        item.setNormalizedName(primary.getNormalizedName());
+        item.setName(primary.getName());
+        item.setType(primary.getEntityType().name());
+        item.setMentionCount(mentions);
+        item.setDocumentCount(documents.size());
+        item.setDocuments(new ArrayList<>(documents.values()));
+        return item;
     }
 
     private Specification<KnowledgeEntity> entitySpecification(UUID userId, UUID documentId,

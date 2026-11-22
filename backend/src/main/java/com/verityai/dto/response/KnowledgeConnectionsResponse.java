@@ -1,0 +1,34 @@
+package com.verityai.dto.response;
+
+import lombok.Data;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Document-to-document links derived from shared entity names. Two documents
+ * are connected when they mention the same normalized entity; the pair carries
+ * the number of shared names and a sample so the claim can be checked.
+ */
+@Data
+public class KnowledgeConnectionsResponse {
+
+    private int documentCount;
+
+    /** Document pairs with at least one shared entity, before the limit. */
+    private int pairCount;
+
+    private boolean truncated;
+
+    private List<Connection> connections;
+
+    @Data
+    public static class Connection {
+        private UUID documentAId;
+        private String documentAName;
+        private UUID documentBId;
+        private String documentBName;
+        private int sharedEntities;
+        private List<String> sampleEntities;
+    }
+}

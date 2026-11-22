@@ -53,9 +53,9 @@ const TYPE_FILTERS: Array<{ value: '' | ContradictionType; label: string }> = [
 ];
 
 const SEVERITY_STYLES: Record<ContradictionSeverity, { label: string; className: string }> = {
-  HIGH: { label: 'High impact', className: 'border-rose-400/25 bg-rose-500/10 text-rose-300' },
-  MEDIUM: { label: 'Medium impact', className: 'border-amber-400/25 bg-amber-500/10 text-amber-300' },
-  LOW: { label: 'Low impact', className: 'border-sky-400/25 bg-sky-500/10 text-sky-300' },
+  HIGH: { label: 'High impact', className: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
+  MEDIUM: { label: 'Medium impact', className: 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  LOW: { label: 'Low impact', className: 'border-sky-400/25 bg-sky-500/10 text-sky-700 dark:text-sky-300' },
 };
 
 /**
@@ -155,7 +155,7 @@ export function ContradictionsPanel() {
                 id="contradiction-scope"
                 value={scopeDocumentId}
                 onChange={(event) => changeScope(event.target.value)}
-                className="mt-1.5 w-full min-w-[240px] rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-400/40 sm:w-auto"
+                className="mt-1.5 w-full min-w-[240px] rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 sm:w-auto"
               >
                 <option value="">Entire library</option>
                 {documents.map((document) => (
@@ -194,7 +194,7 @@ export function ContradictionsPanel() {
         </div>
 
         {documentsQuery.isError && (
-          <p className="mt-3 text-[11px] text-amber-300">
+          <p className="mt-3 text-[11px] text-amber-700 dark:text-amber-300">
             Document list unavailable — library scope still works.
           </p>
         )}
@@ -217,19 +217,19 @@ export function ContradictionsPanel() {
             label="High impact"
             value={stats.bySeverity.HIGH}
             hint="material to a decision"
-            accent="text-rose-300"
+            accent="text-rose-700 dark:text-rose-300"
           />
           <StatCard
             label="Medium impact"
             value={stats.bySeverity.MEDIUM}
             hint="worth reviewing"
-            accent="text-amber-300"
+            accent="text-amber-700 dark:text-amber-300"
           />
           <StatCard
             label="Low impact"
             value={stats.bySeverity.LOW}
             hint="minor discrepancy"
-            accent="text-sky-300"
+            accent="text-sky-700 dark:text-sky-300"
           />
         </section>
       )}
@@ -258,7 +258,7 @@ export function ContradictionsPanel() {
             className={cn(
               'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition',
               typeFilter === option.value
-                ? 'border-indigo-400/30 bg-indigo-500/15 text-indigo-200'
+                ? 'border-primary/30 bg-primary/15 text-primary'
                 : 'border-border/80 bg-card/60 text-muted-foreground hover:bg-accent hover:text-foreground'
             )}
           >
@@ -341,10 +341,10 @@ function DetectionResult({ result }: { result: ContradictionDetectionResponse })
       className={cn(
         'rounded-xl border px-4 py-3 text-[11px] leading-5',
         failed
-          ? 'border-destructive/30 bg-destructive/5 text-rose-200'
+          ? 'border-destructive/30 bg-destructive/5 text-rose-700 dark:text-rose-200'
           : skipped
-            ? 'border-amber-400/25 bg-amber-500/5 text-amber-200'
-            : 'border-emerald-400/20 bg-emerald-500/5 text-emerald-200'
+            ? 'border-amber-400/25 bg-amber-500/5 text-amber-700 dark:text-amber-200'
+            : 'border-emerald-400/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-200'
       )}
     >
       <p className="font-semibold">
@@ -366,7 +366,7 @@ function DetectionResult({ result }: { result: ContradictionDetectionResponse })
 function ContradictionCard({ item }: { item: ContradictionItem }) {
   const severity = SEVERITY_STYLES[item.severity] ?? SEVERITY_STYLES.MEDIUM;
   return (
-    <li className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm transition hover:border-fuchsia-400/25">
+    <li className="rounded-2xl border border-border/80 bg-card/70 p-5 shadow-sm transition hover:border-primary/25">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span
@@ -382,7 +382,7 @@ function ContradictionCard({ item }: { item: ContradictionItem }) {
             )}
             {severity.label}
           </span>
-          <span className="inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-violet-200">
+          <span className="inline-flex rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
             {TYPE_LABELS[item.contradictionType] ?? item.contradictionType}
           </span>
           {item.subjectEntity && (
@@ -444,7 +444,7 @@ function ClaimBlock({
         <p className="eyebrow">{label}</p>
         <Link
           to={`/dashboard/documents/${documentId}`}
-          className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-indigo-300 hover:text-indigo-200"
+          className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-primary hover:text-primary"
         >
           <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="max-w-[220px] truncate">{documentName}</span>

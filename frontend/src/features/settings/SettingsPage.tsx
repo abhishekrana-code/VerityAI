@@ -220,21 +220,10 @@ export function SettingsPage() {
               </div>
               <div className="border-t pt-6">
                 <h3 className="font-medium mb-4">Notifications</h3>
-                <div className="space-y-4">
-                  {[
-                    { label: 'Email notifications', description: 'Receive email updates about your research' },
-                    { label: 'Processing complete', description: 'Notify when document processing finishes' },
-                    { label: 'Weekly digest', description: 'Summary of your research activity' },
-                  ].map((item, i) => (
-                    <label key={i} className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{item.label}</p>
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
-                      </div>
-                      <input type="checkbox" className="h-4 w-4 rounded border-input" defaultChecked />
-                    </label>
-                  ))}
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Email notifications are not available in this build. Document processing
+                  updates appear in History as they happen.
+                </p>
               </div>
             </div>
           )}

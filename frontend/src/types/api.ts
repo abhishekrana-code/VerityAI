@@ -344,6 +344,45 @@ export type KnowledgeEntityType =
   | 'PERSON' | 'ORGANIZATION' | 'LOCATION' | 'PRODUCT' | 'EVENT'
   | 'DATE' | 'METRIC' | 'ACRONYM' | 'CONCEPT' | 'OTHER';
 
+export interface KnowledgeEntityDocumentRef {
+  id: string;
+  name: string;
+  mentionCount: number;
+  firstPage: number | null;
+}
+
+export interface KnowledgeEntityIndexItem {
+  normalizedName: string;
+  name: string;
+  type: KnowledgeEntityType;
+  mentionCount: number;
+  documentCount: number;
+  documents: KnowledgeEntityDocumentRef[];
+}
+
+export interface KnowledgeEntityIndexResponse {
+  totalEntities: number;
+  returnedEntities: number;
+  truncated: boolean;
+  entities: KnowledgeEntityIndexItem[];
+}
+
+export interface KnowledgeConnection {
+  documentAId: string;
+  documentAName: string;
+  documentBId: string;
+  documentBName: string;
+  sharedEntities: number;
+  sampleEntities: string[];
+}
+
+export interface KnowledgeConnectionsResponse {
+  documentCount: number;
+  pairCount: number;
+  truncated: boolean;
+  connections: KnowledgeConnection[];
+}
+
 export interface KnowledgeGraphNode {
   id: string;
   name: string;

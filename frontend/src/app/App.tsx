@@ -25,6 +25,7 @@ const VerificationPage = lazy(() => import('@/features/verification/Verification
 const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const HistoryPage = lazy(() => import('@/features/history/HistoryPage').then((m) => ({ default: m.HistoryPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const DashboardNotFoundPage = lazy(() => import('@/features/not-found/DashboardNotFoundPage').then((m) => ({ default: m.DashboardNotFoundPage })));
 
 function PageLoader() {
   return (
@@ -130,6 +131,8 @@ export function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            {/* Unknown paths inside the app shell get an explanation, not a blank page. */}
+            <Route path="*" element={<DashboardNotFoundPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

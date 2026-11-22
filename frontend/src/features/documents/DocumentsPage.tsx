@@ -17,9 +17,9 @@ import {
   Upload, FileText, Loader2, Search, Trash2, RotateCcw, ChevronLeft, ChevronRight,
   Clock, CheckCircle, AlertCircle, LayoutGrid, List, X, FolderPlus, Eye,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatFileSize, pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/hooks/useToast';
@@ -51,6 +51,7 @@ export function DocumentsPage() {
   const [sort, setSort] = useState('date,desc');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadingName, setUploadingName] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
@@ -98,14 +99,21 @@ export function DocumentsPage() {
         '/documents', formData, setUploadProgress
       );
     },
-    onSuccess: () => {
+    onSuccess: (_result, file) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
-      toast({ title: 'Upload started', description: 'Document is being processed' });
+      toast({
+        title: 'PDF uploaded successfully',
+        description: `${file.name} is queued for processing.`,
+        variant: 'success',
+      });
     },
-    onError: (error: Error) => {
-      toast(errorToast(error, 'Upload failed'));
+    onError: (error: Error, file) => {
+      toast(errorToast(error, `Could not upload ${file.name}`));
     },
-    onSettled: () => setUploadProgress(null),
+    onSettled: () => {
+      setUploadProgress(null);
+      setUploadingName(null);
+    },
   });
 
   const retryMutation = useMutation({
@@ -174,22 +182,51 @@ export function DocumentsPage() {
   const onDrop = (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
-    if (file.type !== 'application/pdf') {
-      toast({ title: 'Invalid file type', description: 'Only PDF files are supported', variant: 'destructive' });
-      return;
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ title: 'File too large', description: 'Maximum file size is 25 MB', variant: 'destructive' });
-      return;
-    }
+    setUploadingName(file.name);
     setUploadProgress(0);
     uploadMutation.mutate(file);
   };
 
+  // react-dropzone rejects a drop before any request is made, so explain why
+  // instead of leaving the drop with no visible result.
+  const onDropRejected = (rejections: FileRejection[]) => {
+    const rejection = rejections[0];
+    if (!rejection) return;
+    const name = rejection.file.name;
+    const code = rejection.errors[0]?.code;
+    if (code === 'file-too-large') {
+      toast({
+        title: 'PDF too large',
+        description: `${name} is larger than the 25 MB limit.`,
+        variant: 'destructive',
+      });
+    } else if (code === 'file-invalid-type') {
+      toast({
+        title: 'Not a PDF',
+        description: `${name} was not uploaded — only PDF files are supported.`,
+        variant: 'destructive',
+      });
+    } else if (code === 'too-many-files') {
+      toast({
+        title: 'One file at a time',
+        description: 'Drop a single PDF to upload it.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Upload rejected',
+        description: rejection.errors[0]?.message ?? `${name} could not be uploaded.`,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: { 'application/pdf': ['.pdf'] },
     maxSize: MAX_FILE_SIZE,
+    multiple: false,
     disabled: uploading,
   });
 
@@ -284,7 +321,9 @@ export function DocumentsPage() {
             : <Upload className="h-8 w-8 text-muted-foreground" />}
           <p className="text-sm font-medium">
             {uploading
-              ? (uploadProgress !== null ? `Uploading… ${uploadProgress}%` : 'Starting upload…')
+              ? (uploadProgress !== null
+                ? `Uploading ${uploadingName ?? 'PDF'}… ${uploadProgress}%`
+                : `Starting upload of ${uploadingName ?? 'PDF'}…`)
               : isDragActive ? 'Drop PDF here' : 'Drag & drop PDF or click to upload'}
           </p>
           <p className="text-xs text-muted-foreground">Max 25 MB • PDF only</p>
@@ -688,8 +727,8 @@ function DocumentCard({
       </div>
       <h3 className="font-medium truncate mb-1" title={doc.originalFilename}>{doc.originalFilename}</h3>
       <p className="text-xs text-muted-foreground mb-2">
-        {doc.pageCount ? `${doc.pageCount} pages • ` : ''}
-        {(doc.sizeBytes / 1024 / 1024).toFixed(1)} MB •{' '}
+        {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
+        {formatFileSize(doc.sizeBytes)} •{' '}
         {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
       </p>
       {(doc.tags?.length || doc.collections?.length) ? (
@@ -802,7 +841,7 @@ function DocumentTable({
                 </td>
                 <td className="p-3"><StatusBadge status={doc.status} /></td>
                 <td className="p-3 text-muted-foreground hidden sm:table-cell">
-                  {(doc.sizeBytes / 1024 / 1024).toFixed(1)} MB
+                  {formatFileSize(doc.sizeBytes)}
                 </td>
                 <td className="p-3 text-muted-foreground hidden md:table-cell">{doc.pageCount ?? '—'}</td>
                 <td className="p-3 hidden lg:table-cell">

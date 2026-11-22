@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, end: true },
   { name: 'Documents', href: '/dashboard/documents', icon: FolderOpen },
+  { name: 'Search', href: '/dashboard/search', icon: Search },
   { name: 'Research workspace', href: '/dashboard/workspace', icon: MessageSquare },
   { name: 'Knowledge graph', href: '/dashboard/knowledge-graph', icon: Network },
   { name: 'Verification', href: '/dashboard/verification', icon: ShieldCheck },
@@ -87,7 +88,7 @@ export function Layout() {
         <div className={cn('px-4 pt-5', !sidebarOpen && 'lg:px-3')}>
           <button
             onClick={() => navigate('/dashboard/workspace')}
-            className={cn('flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-3 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-950/25 transition hover:brightness-110', !sidebarOpen && 'lg:px-0')}
+            className={cn('flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90', !sidebarOpen && 'lg:px-0')}
             title="Start new research"
           >
             <Plus className="h-4 w-4 shrink-0" />
@@ -104,9 +105,9 @@ export function Layout() {
               end={item.end}
               title={!sidebarOpen ? item.name : undefined}
               className={({ isActive }) => cn(
-                'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all',
+                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all',
                 isActive
-                  ? 'bg-indigo-500/12 text-indigo-300 ring-1 ring-inset ring-indigo-400/15'
+                  ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:bg-accent/80 hover:text-foreground',
                 !sidebarOpen && 'lg:justify-center lg:px-0'
               )}
@@ -124,8 +125,8 @@ export function Layout() {
             to="/dashboard/settings"
             title={!sidebarOpen ? 'Settings' : undefined}
             className={({ isActive }) => cn(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all',
-              isActive ? 'bg-indigo-500/12 text-indigo-300 ring-1 ring-inset ring-indigo-400/15' : 'text-muted-foreground hover:bg-accent/80 hover:text-foreground',
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all',
+              isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               !sidebarOpen && 'lg:justify-center lg:px-0'
             )}
             onClick={() => setMobileMenuOpen(false)}
@@ -136,17 +137,17 @@ export function Layout() {
         </nav>
 
         <div className="border-t border-border/70 p-3">
-          <div className={cn('flex items-center gap-3 rounded-xl bg-muted/55 p-3', !sidebarOpen && 'lg:justify-center lg:p-2')}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-bold text-white ring-1 ring-white/10">{initials}</div>
+          <div className={cn('flex items-center gap-3 rounded-lg border border-border/70 p-2.5', !sidebarOpen && 'lg:justify-center lg:p-2')}>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-[11px] font-semibold text-accent-foreground">{initials}</div>
             <div className={cn('min-w-0 flex-1', !sidebarOpen && 'lg:hidden')}>
               <p className="truncate text-xs font-semibold text-foreground">{displayName}</p>
               <p className="truncate text-[10px] text-muted-foreground">{auth?.user?.email}</p>
             </div>
-            <button onClick={handleLogout} disabled={logout.isPending} className={cn('rounded-lg p-2 text-muted-foreground transition hover:bg-accent hover:text-rose-300 disabled:opacity-50', !sidebarOpen && 'lg:hidden')} title="Sign out" aria-label="Sign out">
+            <button onClick={handleLogout} disabled={logout.isPending} className={cn('rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-destructive disabled:opacity-50', !sidebarOpen && 'lg:hidden')} title="Sign out" aria-label="Sign out">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
-          {!sidebarOpen && <button onClick={handleLogout} disabled={logout.isPending} className="mt-2 hidden w-full justify-center rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-rose-300 lg:flex" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>}
+          {!sidebarOpen && <button onClick={handleLogout} disabled={logout.isPending} className="mt-2 hidden w-full justify-center rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-rose-700 dark:hover:text-rose-300 lg:flex" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>}
         </div>
       </aside>
 
@@ -163,7 +164,7 @@ export function Layout() {
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => navigate('/dashboard/search')}
-              className="hidden items-center gap-2 rounded-xl border border-border/80 bg-card/70 px-3 py-2 text-xs text-muted-foreground transition hover:bg-accent hover:text-foreground xl:flex"
+              className="hidden items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground transition hover:border-primary/30 hover:text-foreground xl:flex"
               aria-label="Search your documents"
             >
               <Search className="h-3.5 w-3.5" />
@@ -172,7 +173,7 @@ export function Layout() {
             </button>
             <ThemeToggle />
             <span className="hidden h-8 w-px bg-border sm:block" />
-            <div className="hidden h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-xs font-bold text-indigo-300 sm:flex">{initials}</div>
+            <div className="hidden h-8 w-8 items-center justify-center rounded-md bg-accent text-[11px] font-semibold text-accent-foreground sm:flex">{initials}</div>
           </div>
         </header>
 

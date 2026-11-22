@@ -61,6 +61,39 @@ class ClaimVerificationServiceTest {
     }
 
     @Test
+    void segmentKeepsTrailingCitationWithItsClaim() {
+        // Regression: "sentence. [S1]" used to split into "sentence." plus a
+        // dropped "[S1]" fragment, so a cited claim looked uncited.
+        List<String> claims = ClaimVerificationService.segmentClaims(
+            "Revenue grew by 14 percent in 2024. [S1]\nCosts fell by 3 percent. [S2]");
+
+        assertThat(claims).containsExactly(
+            "Revenue grew by 14 percent in 2024. [S1]",
+            "Costs fell by 3 percent. [S2]");
+    }
+
+    @Test
+    void trailingCitationSurvivesAsAValidReferenceAndCoverage() {
+        List<String> claims = ClaimVerificationService.segmentClaims(
+            "Revenue grew by 14 percent in 2024. [S1]");
+
+        ClaimVerificationService.ClaimDraft draft =
+            new ClaimVerificationService.ClaimDraft(0, claims.get(0));
+        ClaimVerificationService.computeReferences(draft, 1);
+
+        assertThat(draft.validRefs).containsExactly(0);
+        assertThat(ClaimVerificationService.coverage(List.of(draft))).isEqualTo(1.0);
+    }
+
+    @Test
+    void segmentMergesMultipleMarkersButDropsAnOrphanMarkerLine() {
+        List<String> claims = ClaimVerificationService.segmentClaims(
+            "Revenue grew 14 percent. [S1][S2]\n[S3]");
+
+        assertThat(claims).containsExactly("Revenue grew 14 percent. [S1][S2]");
+    }
+
+    @Test
     void segmentOfBlankOrNullIsEmpty() {
         assertThat(ClaimVerificationService.segmentClaims(null)).isEmpty();
         assertThat(ClaimVerificationService.segmentClaims("  \n \n")).isEmpty();

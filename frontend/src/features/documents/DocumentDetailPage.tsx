@@ -12,12 +12,13 @@ import {
   type SummarySection,
   type Tag,
   type Collection,
+  type Conversation,
 } from '@/lib/api';
 import {
   ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle,
-  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, Network, FileBarChart,
+  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, ArrowUpRight, Network, FileBarChart,
 } from 'lucide-react';
-import { cn, isDeferredStatus } from '@/lib/utils';
+import { cn, formatFileSize, isDeferredStatus, pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -77,6 +78,22 @@ export function DocumentDetailPage() {
       setTab('processing');
     },
     onError: (err: Error) => toast({ title: 'Retry failed', description: err.message, variant: 'destructive' }),
+  });
+
+  // Suggested questions start a research session seeded with that question and
+  // this document, instead of leaving the user to retype it in the workspace.
+  const startResearch = useMutation({
+    mutationFn: (question: string) =>
+      api.post<Conversation>('/conversations', {
+        title: question.length > 80 ? `${question.slice(0, 79)}…` : question,
+        documentIds: id ? [id] : [],
+      }),
+    onSuccess: (conversation, question) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      navigate(`/dashboard/workspace/${conversation.id}?q=${encodeURIComponent(question)}`);
+    },
+    onError: (err: Error) =>
+      toast({ title: 'Could not start research', description: err.message, variant: 'destructive' }),
   });
 
   const deleteMutation = useMutation({
@@ -147,8 +164,8 @@ export function DocumentDetailPage() {
             <StatusBadge status={doc.status} />
           </div>
           <p className="text-muted-foreground text-sm">
-            {doc.pageCount ? `${doc.pageCount} pages • ` : ''}
-            {(doc.sizeBytes / 1024 / 1024).toFixed(1)} MB •
+            {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
+            {formatFileSize(doc.sizeBytes)} •
             uploaded {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
           </p>
         </div>
@@ -218,6 +235,8 @@ export function DocumentDetailPage() {
           isLoading={summariesLoading}
           isRegenerating={regenerateMutation.isPending}
           onRegenerate={() => regenerateMutation.mutate()}
+          onAskQuestion={(question) => startResearch.mutate(question)}
+          asking={startResearch.isPending}
         />
       )}
 
@@ -258,13 +277,15 @@ export function DocumentDetailPage() {
 // ---------------------------------------------------------------------------
 
 function SummaryTab({
-  doc, summaries, isLoading, isRegenerating, onRegenerate,
+  doc, summaries, isLoading, isRegenerating, onRegenerate, onAskQuestion, asking,
 }: {
   doc: Document;
   summaries?: DocumentSummariesResponse;
   isLoading: boolean;
   isRegenerating: boolean;
   onRegenerate: () => void;
+  onAskQuestion: (question: string) => void;
+  asking: boolean;
 }) {
   if (doc.status !== 'READY') {
     return (
@@ -320,7 +341,7 @@ function SummaryTab({
 
       {deferred && (
         <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-200">
             <Clock className="h-4 w-4" /> Summary deferred — it will retry automatically
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{summaries.summaryError}</p>
@@ -358,13 +379,26 @@ function SummaryTab({
       )}
 
       {status === 'READY' && summaries?.summaries.map((section) => (
-        <SummarySectionCard key={section.id} section={section} />
+        <SummarySectionCard
+          key={section.id}
+          section={section}
+          onAskQuestion={onAskQuestion}
+          asking={asking}
+        />
       ))}
     </div>
   );
 }
 
-function SummarySectionCard({ section }: { section: SummarySection }) {
+function SummarySectionCard({
+  section,
+  onAskQuestion,
+  asking = false,
+}: {
+  section: SummarySection;
+  onAskQuestion?: (question: string) => void;
+  asking?: boolean;
+}) {
   type Content = {
     summary?: string;
     findings?: Array<{ text: string; type?: string }>;
@@ -396,7 +430,7 @@ function SummarySectionCard({ section }: { section: SummarySection }) {
           'rounded-full px-2 py-0.5 text-[11px] font-medium',
           section.source === 'EXTRACTED'
             ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-            : 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+            : 'bg-primary/15 text-primary dark:text-primary'
         )} title={section.source === 'EXTRACTED'
           ? 'Taken verbatim from the document text'
           : 'Written by the AI based on the document text'}>
@@ -478,8 +512,21 @@ function SummarySectionCard({ section }: { section: SummarySection }) {
       {section.kind === 'SUGGESTED_QUESTIONS' && (
         <ul className="space-y-2">
           {(content.questions ?? []).map((q: string, i: number) => (
-            <li key={i} className="text-sm text-foreground/90 flex gap-2">
-              <span className="text-primary font-medium shrink-0">Q{i + 1}.</span> {q}
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => onAskQuestion?.(q)}
+                disabled={!onAskQuestion || asking}
+                title="Start a research session with this question"
+                className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-foreground/90 transition hover:bg-accent/60 disabled:opacity-60"
+              >
+                <span className="shrink-0 font-medium text-primary">Q{i + 1}.</span>
+                <span className="min-w-0 flex-1">{q}</span>
+                <ArrowUpRight
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100"
+                  aria-hidden="true"
+                />
+              </button>
             </li>
           ))}
           {(content.questions ?? []).length === 0 && (
@@ -735,7 +782,7 @@ function DetailsTab({ doc }: { doc: Document }) {
           <h3 className="font-semibold mb-4">Metadata</h3>
           <dl className="space-y-3 text-sm">
             <Row label="Filename" value={doc.originalFilename} mono />
-            <Row label="Size" value={`${(doc.sizeBytes / 1024 / 1024).toFixed(2)} MB`} />
+            <Row label="Size" value={formatFileSize(doc.sizeBytes)} />
             <Row label="Pages" value={doc.pageCount != null ? String(doc.pageCount) : 'Unknown'} />
             <Row label="Chunks" value={doc.chunkCount != null ? String(doc.chunkCount) : '—'} />
             <Row label="MIME type" value={doc.mimeType} mono />

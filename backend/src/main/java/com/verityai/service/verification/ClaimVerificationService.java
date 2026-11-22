@@ -57,6 +57,9 @@ public class ClaimVerificationService {
 
     private static final Pattern CITATION_REF = Pattern.compile("\\[S(\\d+)\\]");
     private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+");
+    /** A fragment that is nothing but citation markers, e.g. "[S1]" or "[S1][S2]". */
+    private static final Pattern CITATION_ONLY =
+        Pattern.compile("^([\\[\u3010\uFF3B\u300C]\\s*S\\d+\\s*[\\]\u3011\uFF3D\u300D][\\s,;.]*)+$");
     private static final int CLAIM_PROMPT_CHARS = 400;
     private static final int EXCERPT_CHARS = 300;
     private static final int MIN_CLAIM_CHARS = 10;
@@ -228,8 +231,23 @@ public class ClaimVerificationService {
             line = line.replaceFirst("^[-*+]\\s+", "").trim();
             line = line.replaceFirst("^\\d+[.)]\\s+", "").trim();
             if (line.isEmpty()) continue;
+            int firstClaimOnLine = claims.size();
             for (String sentence : SENTENCE_SPLIT.split(line)) {
                 String claim = sentence.trim();
+                if (claim.isEmpty()) {
+                    continue;
+                }
+                if (CITATION_ONLY.matcher(claim).matches()) {
+                    // Answers cite as "sentence. [S1]", so the sentence splitter
+                    // separates the marker from the claim it supports. Attach it
+                    // back, otherwise a cited claim looks uncited (0% coverage)
+                    // and is reported as UNSUPPORTED "No source is cited".
+                    if (claims.size() > firstClaimOnLine) {
+                        int last = claims.size() - 1;
+                        claims.set(last, claims.get(last) + " " + claim);
+                    }
+                    continue;
+                }
                 if (claim.length() >= MIN_CLAIM_CHARS) {
                     claims.add(claim);
                 }

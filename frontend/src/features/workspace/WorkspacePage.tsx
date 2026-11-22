@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Conversation, type ConversationListResponse, type Document } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
 import { Plus, Search, Loader2, MessageSquare, FileText, Sparkles, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useDropzone } from 'react-dropzone';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
@@ -220,7 +220,9 @@ export function WorkspacePage() {
                       />
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="truncate">{doc.originalFilename}</span>
-                      {doc.pageCount && <span className="text-xs text-muted-foreground">({doc.pageCount} pages)</span>}
+                      {doc.pageCount != null && (
+                        <span className="text-xs text-muted-foreground">({pluralize(doc.pageCount, 'page')})</span>
+                      )}
                     </label>
                   ))}
                   {documents?.length === 0 && (
@@ -258,48 +260,40 @@ export function WorkspacePage() {
 }
 
 function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: () => void }) {
-  const navigate = useNavigate();
   return (
-    <div
-      onClick={() => navigate(`/dashboard/workspace/${conv.id}`)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          navigate(`/dashboard/workspace/${conv.id}`);
-        }
-      }}
-      role="link"
-      tabIndex={0}
-      className="flex items-center gap-4 rounded-xl border p-4 hover:border-primary/50 hover:bg-accent/50 transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <MessageSquare className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex-shrink-0 flex items-center justify-center" />
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium truncate">{conv.title}</h3>
-        <p className="text-xs text-muted-foreground">
-          {conv.messageCount} messages • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
-        </p>
-        {conv.documents.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {conv.documents.slice(0, 3).map((d) => (
-              <span key={d.id} className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground bg-muted">
-                <FileText className="h-3 w-3" />
-                {d.originalFilename}
-              </span>
-            ))}
-            {conv.documents.length > 3 && (
-              <span className="text-xs text-muted-foreground">+{conv.documents.length - 3} more</span>
-            )}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="group flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-primary/50 hover:bg-accent/50 focus-within:border-primary/50">
+      <Link
+        to={`/dashboard/workspace/${conv.id}`}
+        className="flex min-w-0 flex-1 items-center gap-4 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <MessageSquare className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex-shrink-0 flex items-center justify-center" />
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium truncate">{conv.title}</h3>
+          <p className="text-xs text-muted-foreground">
+            {conv.messageCount} messages • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
+          </p>
+          {conv.documents.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {conv.documents.slice(0, 3).map((d) => (
+                <span key={d.id} className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground bg-muted">
+                  <FileText className="h-3 w-3" />
+                  {d.originalFilename}
+                </span>
+              ))}
+              {conv.documents.length > 3 && (
+                <span className="text-xs text-muted-foreground">+{conv.documents.length - 3} more</span>
+              )}
+            </div>
+          )}
+        </div>
+      </Link>
+      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <button
+          type="button"
           className="p-2 rounded-lg hover:bg-accent"
           title="Delete"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
+          aria-label={`Delete ${conv.title}`}
+          onClick={onDelete}
         >
           <Trash2 className="h-4 w-4 text-muted-foreground" />
         </button>

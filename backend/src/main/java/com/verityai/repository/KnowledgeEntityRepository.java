@@ -23,6 +23,9 @@ public interface KnowledgeEntityRepository extends JpaRepository<KnowledgeEntity
     @Query("SELECT COUNT(DISTINCT e.document.id) FROM KnowledgeEntity e WHERE e.user.id = :userId")
     long countDistinctDocumentsByUserId(@Param("userId") UUID userId);
 
+    @Query("SELECT COUNT(DISTINCT e.normalizedName) FROM KnowledgeEntity e WHERE e.user.id = :userId")
+    long countDistinctNamesByUserId(@Param("userId") UUID userId);
+
     @Query("SELECT e FROM KnowledgeEntity e WHERE e.user.id = :userId AND e.document.id = :documentId " +
            "ORDER BY e.mentionCount DESC, e.name ASC")
     List<KnowledgeEntity> findByUserAndDocument(@Param("userId") UUID userId,

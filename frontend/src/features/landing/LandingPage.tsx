@@ -11,25 +11,25 @@ const features = [
   {
     icon: Search,
     title: 'Evidence-Based Answers',
-    description: 'Every answer cites its sources with page numbers and excerpts. No hallucinations — only what your documents support.',
+    description: 'Answers cite the passages they drew on, with document, page and excerpt, and flag when the retrieved evidence looks thin.',
   },
   {
     icon: Shield,
     title: 'Private & Secure',
-    description: 'Your documents never leave your infrastructure. Session-based auth, encrypted storage, and full audit trails.',
+    description: 'Self-hosted, so your PDFs stay on your own server. Accounts are isolated per user and every processing step is recorded in a visible history.',
   },
   {
     icon: BookOpen,
     title: 'Research Workspace',
-    description: 'Organize conversations by project. Revisit previous research, share context, and build on prior findings.',
+    description: 'Keep one conversation per investigation, attach the documents an answer may use, and revisit earlier questions together with their sources.',
   },
 ];
 
 const trustPoints = [
   'Source citations with page-level precision',
-  'Full-text search across all uploaded documents',
+  'Keyword and semantic search across your documents',
   'Configurable AI model via Groq API',
-  'Open architecture — extend with vector search',
+  'Contradiction detection between documents',
   'Self-hosted — your data, your control',
 ];
 
@@ -68,7 +68,7 @@ export function LandingPage() {
               </Link>
               <Link
                 to="/register"
-                className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-950/25 transition hover:-translate-y-0.5 hover:bg-primary/90"
+                className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition hover:-translate-y-0.5 hover:bg-primary/90"
               >
                 Get Started
               </Link>
@@ -80,58 +80,58 @@ export function LandingPage() {
       {/* Hero */}
       <main id="main-content" tabIndex={-1} className="flex-1">
         <section className="relative isolate mx-auto w-full max-w-7xl overflow-hidden px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
-          <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[520px] max-w-5xl rounded-full bg-indigo-500/[0.09] blur-[120px]" />
           <div className="subtle-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[540px] opacity-40" />
           <div className="mx-auto max-w-4xl text-center">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-4 py-2 text-xs font-semibold tracking-wide text-indigo-300 shadow-lg shadow-indigo-950/10">
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-medium text-primary">
               <Sparkles className="h-4 w-4" />
               <span>Answers you can verify</span>
             </div>
-            <h1 className="mb-7 text-4xl font-extrabold leading-[1.08] tracking-[-0.055em] text-foreground sm:text-5xl lg:text-[4.35rem]">
+            <h1 className="mb-7 text-4xl font-semibold leading-[1.06] tracking-[-0.04em] text-foreground sm:text-5xl lg:text-[4.25rem]">
               AI Research Assistant with{' '}
-              <span className="bg-gradient-to-r from-indigo-300 via-violet-300 to-sky-300 bg-clip-text text-transparent">Evidence-Based Answers</span>
+              <span className="text-primary">Evidence-Based Answers</span>
             </h1>
             <p className="mx-auto mb-10 max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
               Upload PDFs, ask questions, and get answers grounded in your documents.
-              Every claim cites its source — page numbers, excerpts, and confidence scores included.
+              Every answer links back to the passages it used, with document, page and excerpt,
+              so you can check each claim against the evidence yourself.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 to="/register"
-                className="w-full rounded-xl bg-primary px-7 py-3.5 text-sm font-semibold text-primary-foreground shadow-xl shadow-indigo-950/30 transition hover:-translate-y-0.5 hover:bg-primary/90 sm:w-auto"
+                className="w-full rounded-lg bg-primary px-7 py-3.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 sm:w-auto"
               >
                 Start Free — No Credit Card Required
               </Link>
               <Link
                 to="/login"
-                className="w-full rounded-xl border border-border bg-card/70 px-7 py-3.5 text-sm font-semibold text-foreground transition hover:border-primary/40 hover:bg-accent sm:w-auto"
+                className="w-full rounded-lg border border-border bg-card px-7 py-3.5 text-sm font-medium text-foreground transition hover:border-primary/40 hover:bg-muted sm:w-auto"
               >
                 Sign In
               </Link>
             </div>
           </div>
 
-          <div className="mx-auto mt-20 max-w-5xl rounded-[26px] border border-white/10 bg-gradient-to-b from-slate-800/80 to-slate-950/90 p-2 shadow-[0_35px_100px_-35px_rgba(79,70,229,0.45)] sm:mt-24 sm:p-3">
-            <div className="overflow-hidden rounded-[20px] border border-white/10 bg-[#0c1220] text-left">
-              <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-rose-400"/><span className="h-2 w-2 rounded-full bg-amber-400"/><span className="h-2 w-2 rounded-full bg-emerald-400"/><span className="ml-3 text-xs font-medium text-slate-400">Research workspace · Example preview</span></div>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">Evidence-first</span>
+          <div className="mx-auto mt-20 max-w-5xl rounded-2xl border border-border bg-muted/40 p-2 sm:mt-24 sm:p-3">
+            <div className="overflow-hidden rounded-xl border border-border bg-card text-left">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-rose-400"/><span className="h-2 w-2 rounded-full bg-amber-400"/><span className="h-2 w-2 rounded-full bg-emerald-400"/><span className="ml-3 text-xs font-medium text-muted-foreground">Research workspace · Example preview</span></div>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">Evidence-first</span>
               </div>
               <div className="grid md:grid-cols-[1fr_260px]">
                 <div className="p-5 sm:p-8">
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-300">Research question</p>
-                  <h3 className="mb-6 text-xl font-bold tracking-tight text-slate-100 sm:text-2xl">What are the key findings in my source material?</h3>
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 sm:p-5">
-                    <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-300"><Sparkles className="h-3.5 w-3.5 text-indigo-300"/> VerityAI response</div>
-                    <p className="text-sm leading-7 text-slate-300">A clear research answer is organized around the evidence retrieved from your documents. Supporting passages can be reviewed alongside the response, helping you trace each conclusion back to its source.</p>
-                    <div className="mt-5 flex flex-wrap gap-2"><span className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300/20 bg-indigo-400/10 px-2.5 py-1.5 text-[10px] font-semibold text-indigo-200"><Quote className="h-3 w-3"/> Source citation</span><span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[10px] font-medium text-slate-400"><FileText className="h-3 w-3"/> Retrieved context</span></div>
+                  <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Research question</p>
+                  <h3 className="mb-6 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">What are the key findings in my source material?</h3>
+                  <div className="rounded-xl border border-border bg-muted/40 p-4 sm:p-5">
+                    <div className="mb-3 flex items-center gap-2 text-xs font-medium text-foreground"><Sparkles className="h-3.5 w-3.5 text-primary"/> VerityAI response</div>
+                    <p className="text-sm leading-7 text-muted-foreground">A clear research answer is organized around the evidence retrieved from your documents. Supporting passages can be reviewed alongside the response, helping you trace each conclusion back to its source.</p>
+                    <div className="mt-5 flex flex-wrap gap-2"><span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-[10px] font-semibold text-primary"><Quote className="h-3 w-3"/> Source citation</span><span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[10px] font-medium text-muted-foreground"><FileText className="h-3 w-3"/> Retrieved context</span></div>
                   </div>
                 </div>
-                <aside className="border-t border-white/10 bg-white/[0.025] p-5 md:border-l md:border-t-0">
-                  <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Evidence panel</p>
+                <aside className="border-t border-border bg-muted/30 p-5 md:border-l md:border-t-0">
+                  <p className="mb-4 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Evidence panel</p>
                   <div className="space-y-3">
-                    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-slate-200">Source excerpt</span><FileText className="h-3.5 w-3.5 text-indigo-300"/></div><p className="text-[11px] leading-5 text-slate-400">Relevant passages appear here with document context and page references.</p><p className="mt-2 text-[10px] font-semibold text-indigo-300">Document · Page reference</p></div>
-                    <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] p-3"><div className="flex items-center gap-2 text-xs font-semibold text-emerald-300"><ShieldCheck className="h-3.5 w-3.5"/> Traceable evidence</div><p className="mt-2 text-[11px] leading-5 text-slate-400">Review source material before relying on a conclusion.</p></div>
+                    <div className="rounded-lg border border-border bg-card p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-medium text-foreground">Source excerpt</span><FileText className="h-3.5 w-3.5 text-primary"/></div><p className="text-[11px] leading-5 text-muted-foreground">Relevant passages appear here with document context and page references.</p><p className="mt-2 text-[10px] font-semibold text-primary">Document · Page reference</p></div>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-400/15 dark:bg-emerald-400/[0.06]"><div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><ShieldCheck className="h-3.5 w-3.5"/> Traceable evidence</div><p className="mt-2 text-[11px] leading-5 text-muted-foreground">Review source material before relying on a conclusion.</p></div>
                   </div>
                 </aside>
               </div>
@@ -153,7 +153,7 @@ export function LandingPage() {
             {features.map((feature) => (
               <article
                 key={feature.title}
-                className="group rounded-2xl border border-border/80 bg-card/80 p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl hover:shadow-indigo-950/15"
+                className="group rounded-xl border border-border bg-card p-6 transition-colors duration-200 hover:border-primary/35"
               >
                 <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
                   <feature.icon className="h-6 w-6" />
@@ -191,8 +191,8 @@ export function LandingPage() {
               },
               {
                 step: '03',
-                title: 'Get Verified Answers',
-                description: 'Receive evidence-based responses with inline citations. Click any citation to see the source.',
+                title: 'Check the Evidence',
+                description: 'Open any citation to read the source passage, then verify the answer\'s claims against it.',
                 icon: CheckCircle,
               },
             ].map((item) => (
@@ -220,7 +220,8 @@ export function LandingPage() {
               Security & Privacy by Design
             </h2>
             <p className="text-muted-foreground text-lg">
-              Your research data never leaves your control.
+              Uploaded files stay on the server you run. Only the passages needed to answer a
+              question are sent to the AI provider you configure.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
@@ -234,7 +235,7 @@ export function LandingPage() {
         </section>
 
         {/* CTA */}
-        <section className="mx-4 my-12 rounded-[28px] border border-indigo-300/20 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-700 px-6 py-20 text-white shadow-2xl shadow-indigo-950/25 sm:mx-auto sm:max-w-7xl sm:px-12 lg:py-24">
+        <section className="mx-4 my-12 rounded-2xl bg-primary px-6 py-20 text-primary-foreground sm:mx-auto sm:max-w-7xl sm:px-12 lg:py-24">
           <div className="text-center max-w-2xl mx-auto">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
               Ready to Research Smarter?

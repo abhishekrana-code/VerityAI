@@ -19,28 +19,37 @@ import { PageEmpty, PageError, PageLoading, StatCard } from '@/components/ui/Pag
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
 import { layoutGraph } from './graphLayout';
+import { LibraryOverview } from './LibraryOverview';
+import type { GraphLayout } from './graphLayout';
+import { visibleLabels } from './graphLabels';
+import { backboneLinks } from './graphEdges';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ArrowUpRight, FileText, Filter, Loader2, Network, RefreshCw, Search, X,
 } from 'lucide-react';
 
 const ENTITY_TYPES: Array<{ value: KnowledgeEntityType; label: string; color: string; badge: string }> = [
-  { value: 'PERSON', label: 'Person', color: '#818cf8', badge: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
-  { value: 'ORGANIZATION', label: 'Organization', color: '#34d399', badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-  { value: 'LOCATION', label: 'Location', color: '#fbbf24', badge: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
+  { value: 'PERSON', label: 'Person', color: '#818cf8', badge: 'bg-primary/15 text-primary border-primary/25' },
+  { value: 'ORGANIZATION', label: 'Organization', color: '#34d399', badge: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/25' },
+  { value: 'LOCATION', label: 'Location', color: '#fbbf24', badge: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/25' },
   { value: 'PRODUCT', label: 'Product', color: '#f472b6', badge: 'bg-pink-500/15 text-pink-300 border-pink-400/25' },
-  { value: 'EVENT', label: 'Event', color: '#fb923c', badge: 'bg-orange-500/15 text-orange-300 border-orange-400/25' },
+  { value: 'EVENT', label: 'Event', color: '#fb923c', badge: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-400/25' },
   { value: 'DATE', label: 'Date', color: '#22d3ee', badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/25' },
   { value: 'METRIC', label: 'Metric', color: '#a3e635', badge: 'bg-lime-500/15 text-lime-300 border-lime-400/25' },
-  { value: 'ACRONYM', label: 'Acronym', color: '#c084fc', badge: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
-  { value: 'CONCEPT', label: 'Concept', color: '#94a3b8', badge: 'bg-slate-500/15 text-slate-300 border-slate-400/25' },
+  { value: 'ACRONYM', label: 'Acronym', color: '#c084fc', badge: 'bg-primary/15 text-primary border-primary/25' },
+  { value: 'CONCEPT', label: 'Concept', color: '#94a3b8', badge: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-400/25' },
   { value: 'OTHER', label: 'Other', color: '#64748b', badge: 'bg-slate-600/15 text-slate-400 border-slate-500/25' },
 ];
 
 const TYPE_MAP = new Map(ENTITY_TYPES.map((type) => [type.value, type]));
 
-const GRAPH_WIDTH = 860;
-const GRAPH_HEIGHT = 540;
+const GRAPH_WIDTH = 900;
+const GRAPH_HEIGHT = 560;
+
+/** Display limits, in entities by mention count. The API returns at most 120. */
+const NODE_LIMITS = [40, 80, 120] as const;
+const DEFAULT_NODE_LIMIT = 40;
+const LABEL_COUNT = 14;
 
 export function KnowledgeGraphPage() {
   const queryClient = useQueryClient();
@@ -53,6 +62,7 @@ export function KnowledgeGraphPage() {
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [nodeLimit, setNodeLimit] = useState<number>(DEFAULT_NODE_LIMIT);
   const [preview, setPreview] = useState<{ doc: PdfPreviewTarget; page: number } | null>(null);
 
   // Consume the hand-off filter so later manual changes are not overridden on reload.
@@ -88,8 +98,8 @@ export function KnowledgeGraphPage() {
       api.post<KnowledgeGraphRebuildResponse>('/knowledge-graph/rebuild',
         documentId ? { documentIds: [documentId] } : {}),
     onSuccess: (result) => {
+      // Also covers the library panels, which key off the same prefix.
       queryClient.invalidateQueries({ queryKey: ['knowledge-graph'] });
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
       if (result.rebuilt > 0) {
         toast({
           title: `Rebuilt ${result.rebuilt} graph${result.rebuilt === 1 ? '' : 's'}`,
@@ -112,9 +122,33 @@ export function KnowledgeGraphPage() {
   // only queue a duplicate and must stay disabled.
   const graphDeferred = isDeferredStatus(graph?.status, graph?.error);
   const rebuildBlocked = rebuild.isPending || (graph?.status === 'PENDING' && !graphDeferred);
+  // A co-occurrence graph is close to complete, so drawing every entity and
+  // every link always produces an unreadable hairball. Show the most-mentioned
+  // entities by default; the rest stay reachable through the limit control and
+  // the entity index.
+  const displayedNodes = useMemo(() => {
+    const nodes = graph?.nodes ?? [];
+    if (nodes.length <= nodeLimit) return nodes;
+    const ranked = [...nodes].sort(
+      (a, b) => b.mentionCount - a.mentionCount || a.name.localeCompare(b.name),
+    );
+    const visible = ranked.slice(0, nodeLimit);
+    if (selectedId && !visible.some((node) => node.id === selectedId)) {
+      const selected = nodes.find((node) => node.id === selectedId);
+      if (selected) visible.push(selected);
+    }
+    return visible;
+  }, [graph, nodeLimit, selectedId]);
+
+  const displayedEdges = useMemo(() => {
+    if (!graph) return [];
+    const ids = new Set(displayedNodes.map((node) => node.id));
+    return graph.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+  }, [graph, displayedNodes]);
+
   const layout = useMemo(
-    () => layoutGraph(graph?.nodes ?? [], graph?.edges ?? [], { width: GRAPH_WIDTH, height: GRAPH_HEIGHT }),
-    [graph],
+    () => layoutGraph(displayedNodes, displayedEdges, { width: GRAPH_WIDTH, height: GRAPH_HEIGHT }),
+    [displayedNodes, displayedEdges],
   );
   const selectedNode = graph?.nodes.find((node) => node.id === selectedId) ?? null;
   const connected = selectedNode && graph
@@ -143,8 +177,7 @@ export function KnowledgeGraphPage() {
 
   return (
     <div className="space-y-6">
-      <section className="relative isolate overflow-hidden rounded-[26px] border border-indigo-400/15 bg-gradient-to-br from-indigo-500/[0.14] via-card to-violet-500/[0.08] p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 -z-10 h-64 w-64 rounded-full bg-violet-500/15 blur-[90px]" />
+      <section className="page-hero">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="eyebrow">Knowledge graph</p>
@@ -159,7 +192,7 @@ export function KnowledgeGraphPage() {
             onClick={() => rebuild.mutate()}
             disabled={rebuildBlocked}
             title={graphDeferred ? 'The last rebuild was deferred — retry it now' : undefined}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card/80 px-4 py-2.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"
+            className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
           >
             {rebuildBlocked
               ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -316,7 +349,7 @@ export function KnowledgeGraphPage() {
               )}
 
               {graph.truncated && (
-                <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+                <p className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-200">
                   Showing the {graph.returnedEntities} most-mentioned entities. Narrow the document
                   scope or filter by type/name to see the rest.
                 </p>
@@ -324,9 +357,32 @@ export function KnowledgeGraphPage() {
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/50">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-4 py-2.5">
+                    <p className="text-[11px] text-muted-foreground">
+                      Grouped by entity type ·{' '}
+                      <span className="font-semibold text-foreground/80">{displayedNodes.length}</span>
+                      {' '}of {graph.nodes.length} entities · hover or select one to trace its links
+                    </p>
+                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span className="sr-only">Entities shown</span>
+                      <select
+                        value={String(nodeLimit)}
+                        onChange={(event) => setNodeLimit(Number(event.target.value))}
+                        aria-label="Entities shown"
+                        className="rounded-md border border-border/70 bg-background/70 px-2 py-1 text-[11px] font-medium text-foreground outline-none"
+                      >
+                        {NODE_LIMITS.map((limit) => (
+                          <option key={limit} value={String(limit)}>
+                            {limit >= 120 ? 'All entities' : `Top ${limit}`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                   <GraphCanvas
-                    nodes={graph.nodes}
-                    edges={graph.edges}
+                    nodes={displayedNodes}
+                    edges={displayedEdges}
                     layout={layout}
                     selectedId={selectedId}
                     onSelect={setSelectedId}
@@ -353,11 +409,15 @@ export function KnowledgeGraphPage() {
                 />
               </div>
 
-              <EntityIndex
-                nodes={graph.nodes}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
+              {documentId ? (
+                <EntityIndex
+                  nodes={graph.nodes}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              ) : (
+                <LibraryOverview />
+              )}
             </>
           )}
 
@@ -391,33 +451,86 @@ function GraphCanvas({
 }: {
   nodes: KnowledgeGraphNode[];
   edges: KnowledgeGraphEdge[];
-  layout: Map<string, { x: number; y: number; radius: number }>;
+  layout: GraphLayout;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const focusId = hoveredId ?? selectedId;
+
   const connectedIds = useMemo(() => {
-    if (!selectedId) return new Set<string>();
+    if (!focusId) return new Set<string>();
     const ids = new Set<string>();
     for (const edge of edges) {
-      if (edge.source === selectedId) ids.add(edge.target);
-      if (edge.target === selectedId) ids.add(edge.source);
+      if (edge.source === focusId) ids.add(edge.target);
+      if (edge.target === focusId) ids.add(edge.source);
     }
     return ids;
-  }, [edges, selectedId]);
+  }, [edges, focusId]);
+
+  // Without a focus, draw only each entity's single strongest link: the full
+  // edge set of a near-complete graph is what made the old canvas unreadable.
+  const visibleEdges = useMemo(() => {
+    if (focusId) {
+      return edges.filter((edge) => edge.source === focusId || edge.target === focusId);
+    }
+    // Dense libraries can afford to ignore single-passage coincidences; small
+    // scopes would otherwise lose every link they have.
+    return backboneLinks(edges, { minWeight: edges.length > 60 ? 2 : 1 });
+  }, [edges, focusId]);
+
+  // Names on every node would overlap; label the hubs, plus whatever is focused.
+  const labels = useMemo(
+    () =>
+      visibleLabels(nodes, layout.nodes, {
+        max: focusId ? 28 : LABEL_COUNT,
+        always: focusId ? new Set([focusId, ...connectedIds]) : undefined,
+      }),
+    [nodes, layout, focusId, connectedIds],
+  );
 
   return (
     <svg
       viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-      className="h-auto w-full"
+      className="h-auto w-full bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border))_1px,transparent_0)] [background-size:22px_22px]"
       role="img"
       aria-label={`Knowledge graph with ${nodes.length} entities and ${edges.length} co-occurrence links`}
     >
       <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="transparent" onClick={() => onSelect(null)} />
-      {edges.map((edge) => {
-        const source = layout.get(edge.source);
-        const target = layout.get(edge.target);
+      {layout.islands.map((island) => {
+        const style = TYPE_MAP.get(island.type as KnowledgeEntityType) ?? TYPE_MAP.get('OTHER')!;
+        return (
+          <g key={`island-${island.type}`} className="pointer-events-none">
+            <rect
+              x={island.x}
+              y={island.y}
+              width={island.width}
+              height={island.height}
+              rx={16}
+              fill={style.color}
+              fillOpacity={0.05}
+              stroke={style.color}
+              strokeOpacity={0.25}
+              strokeDasharray="3 7"
+            />
+            <text
+              x={island.x + 12}
+              y={island.y + 14}
+              fontSize={10.5}
+              fontWeight={600}
+              fill={style.color}
+              letterSpacing={0.6}
+            >
+              {style.label.toUpperCase()} · {island.count}
+            </text>
+          </g>
+        );
+      })}
+      {visibleEdges.map((edge) => {
+        const source = layout.nodes.get(edge.source);
+        const target = layout.nodes.get(edge.target);
         if (!source || !target) return null;
-        const active = !selectedId || edge.source === selectedId || edge.target === selectedId;
+        const focused = Boolean(focusId);
         return (
           <line
             key={edge.id}
@@ -425,26 +538,32 @@ function GraphCanvas({
             y1={source.y}
             x2={target.x}
             y2={target.y}
-            stroke={active ? '#818cf8' : '#475569'}
-            strokeWidth={active ? Math.min(3, 0.8 + edge.weight * 0.25) : 0.8}
-            strokeOpacity={active ? Math.min(0.65, 0.18 + edge.weight * 0.08) : 0.12}
+            stroke="#a53e5a"
+            strokeWidth={focused ? Math.min(4, 1 + edge.weight * 0.35) : Math.min(1.6, 0.6 + edge.weight * 0.15)}
+            strokeOpacity={focused ? Math.min(0.7, 0.35 + edge.weight * 0.08) : Math.min(0.22, 0.08 + edge.weight * 0.04)}
+            strokeLinecap="round"
           >
             <title>{`Co-occurs in ${edge.weight} passage${edge.weight === 1 ? '' : 's'}`}</title>
           </line>
         );
       })}
       {nodes.map((node) => {
-        const point = layout.get(node.id);
+        const point = layout.nodes.get(node.id);
         if (!point) return null;
         const style = TYPE_MAP.get(node.type) ?? TYPE_MAP.get('OTHER')!;
         const selected = node.id === selectedId;
-        const dimmed = Boolean(selectedId && !selected && !connectedIds.has(node.id));
+        const focused = node.id === focusId;
+        const dimmed = Boolean(focusId && !focused && !connectedIds.has(node.id));
         return (
           <g
             key={node.id}
             role="button"
             tabIndex={0}
             aria-label={`${node.name}, ${style.label}, ${node.mentionCount} mentions`}
+            onMouseEnter={() => setHoveredId(node.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            onFocus={() => setHoveredId(node.id)}
+            onBlur={() => setHoveredId(null)}
             onClick={(event) => {
               event.stopPropagation();
               onSelect(selected ? null : node.id);
@@ -463,21 +582,35 @@ function GraphCanvas({
               cy={point.y}
               r={point.radius + (selected ? 4 : 0)}
               fill={style.color}
-              fillOpacity={selected ? 0.95 : 0.75}
-              stroke={selected ? '#e0e7ff' : '#0f172a'}
+              fillOpacity={focused || selected ? 0.95 : 0.8}
+              stroke={selected ? '#a53e5a' : 'hsl(var(--card))'}
               strokeWidth={selected ? 2.5 : 1.5}
+              strokeOpacity={dimmed ? 0.5 : 1}
             />
-            <text
-              x={point.x}
-              y={point.y + point.radius + 13}
-              textAnchor="middle"
-              className="pointer-events-none select-none"
-              fontSize={10}
-              fill="#cbd5e1"
-            >
-              {truncate(node.name, 22)}
-            </text>
           </g>
+        );
+      })}
+      {labels.map((label) => {
+        const selected = label.id === selectedId;
+        const focused = label.id === focusId;
+        const dimmed = Boolean(focusId && !focused && !connectedIds.has(label.id));
+        return (
+          <text
+            key={`label-${label.id}`}
+            x={label.x}
+            y={label.y}
+            textAnchor="middle"
+            className="pointer-events-none select-none"
+            fontSize={10.5}
+            fontWeight={selected || focused ? 600 : 500}
+            fill={selected || focused ? '#a53e5a' : 'hsl(var(--muted-foreground))'}
+            stroke="hsl(var(--card))"
+            strokeWidth={3}
+            paintOrder="stroke"
+            opacity={dimmed ? 0.4 : 1}
+          >
+            {label.text}
+          </text>
         );
       })}
     </svg>
@@ -501,7 +634,7 @@ function EntityPanel({
     return (
       <aside className="rounded-2xl border border-border/80 bg-card/60 p-5">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <Network className="h-4 w-4 text-indigo-300" aria-hidden="true" />
+          <Network className="h-4 w-4 text-primary" aria-hidden="true" />
           Entity inspector
         </div>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -548,7 +681,7 @@ function EntityPanel({
       </div>
 
       {node.evidenceExcerpt ? (
-        <blockquote className="mt-4 rounded-xl border-l-2 border-indigo-400/50 bg-indigo-500/[0.06] px-3 py-2 text-xs leading-6 text-muted-foreground">
+        <blockquote className="mt-4 rounded-xl border-l-2 border-primary/50 bg-primary/[0.06] px-3 py-2 text-xs leading-6 text-muted-foreground">
           “{node.evidenceExcerpt}”
         </blockquote>
       ) : (
@@ -635,7 +768,7 @@ function EntityIndex({
                   aria-label={`${node.name}, ${style.label}, ${node.mentionCount} mentions`}
                   className={cn(
                     'cursor-pointer border-t border-border/40 hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40',
-                    node.id === selectedId && 'bg-indigo-500/10',
+                    node.id === selectedId && 'bg-primary/10',
                   )}
                   onClick={() => onSelect(node.id)}
                   onKeyDown={(event) => {
@@ -664,6 +797,3 @@ function EntityIndex({
   );
 }
 
-function truncate(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
-}
