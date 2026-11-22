@@ -16,8 +16,10 @@
 # Why a custom entrypoint: the image's default `containerboot` aborts the
 # interactive login after 60 seconds, which rotates the auth URL before it can
 # be opened and leaves the node flapping. Running `tailscaled` directly lets
-# `tailscale up --timeout=0s` wait as long as needed. An auth key
-# (TS_AUTHKEY in .env.tailscale) skips the prompt entirely.
+# `tailscale up --timeout=0s` wait as long as needed. An auth key skips the
+# prompt entirely: export TS_AUTHKEY in the shell, or pass it in with
+# `docker compose --env-file .env --env-file .env.tailscale -f … up -d`. This
+# service has no env_file entry, so it does not read .env.tailscale itself.
 
 services:
   tailscale:
@@ -25,7 +27,7 @@ services:
     container_name: verityai-tailscale
     hostname: verityai
     environment:
-      # Optional: set TS_AUTHKEY in .env.tailscale to log in without a prompt.
+      # Optional: interpolated from the shell or an explicit --env-file.
       TS_AUTHKEY: ${TS_AUTHKEY:-}
     entrypoint:
       - /bin/sh
