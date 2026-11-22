@@ -3,25 +3,34 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Conversation, type ConversationListResponse, type Document } from '@/lib/api';
+import { api, type Conversation, type ConversationListResponse, type Document, type Message } from '@/lib/api';
+import { createConversation, deriveConversationTitle } from '@/lib/conversation';
 import { errorToast } from '@/lib/errors';
-import { Plus, Search, Loader2, MessageSquare, FileText, Sparkles, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
-import { cn, pluralize } from '@/lib/utils';
+import {
+  Search, Loader2, MessageSquare, FileText, Sparkles, ChevronLeft, ChevronRight,
+  Trash2, Send, Check, ChevronDown,
+} from 'lucide-react';
+import { pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { useDropzone } from 'react-dropzone';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
+import { UploadDropzone } from '@/components/UploadDropzone';
+
+interface AskResult {
+  conversation: Conversation;
+  askFailed: boolean;
+  error?: string;
+}
 
 export function WorkspacePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
-  const [showNewConversation, setShowNewConversation] = useState(false);
-  const [newConvTitle, setNewConvTitle] = useState('');
-  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const navigate = useNavigate();
+  const [question, setQuestion] = useState('');
+  const [scopeIds, setScopeIds] = useState<string[]>([]);
+  const [scopeOpen, setScopeOpen] = useState(false);
 
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations', page, search],
@@ -36,22 +45,49 @@ export function WorkspacePage() {
   });
 
   const { data: documents } = useQuery({
-    queryKey: ['documents', 'all'],
+    queryKey: ['documents', 'ready'],
     queryFn: () => api.get<{ content: Document[] }>('/documents?size=100&status=READY'),
     select: (data) => data.content,
   });
 
-  const createConversationMutation = useMutation({
-    mutationFn: (data: { title: string; documentIds: string[] }) => api.post<Conversation>('/conversations', data),
-    onSuccess: (conversation: Conversation) => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      setShowNewConversation(false);
-      setNewConvTitle('');
-      setSelectedDocIds([]);
-      toast({ title: 'Conversation created', description: 'Start researching now' });
-      navigate(`/dashboard/workspace/${conversation.id}`);
+  /**
+   * Asking creates the conversation implicitly, so the user never names one
+   * first. If the answer request itself fails (rate limit, provider error) the
+   * conversation is still opened with the question pre-filled rather than
+   * discarding what they typed.
+   */
+  const askMutation = useMutation<AskResult, Error, { question: string; documentIds: string[] }>({
+    mutationFn: async ({ question: text, documentIds }) => {
+      const conversation = await createConversation(deriveConversationTitle(text), documentIds);
+      try {
+        await api.post<Message>(`/conversations/${conversation.id}/messages`, {
+          question: text,
+          documentIds: [],
+        });
+        return { conversation, askFailed: false };
+      } catch (error) {
+        return {
+          conversation,
+          askFailed: true,
+          error: error instanceof Error ? error.message : 'The question could not be sent.',
+        };
+      }
     },
-    onError: () => toast({ title: 'Failed to create conversation', variant: 'destructive' }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      const path = `/dashboard/workspace/${result.conversation.id}`;
+      if (result.askFailed) {
+        toast({
+          title: 'Question not sent',
+          description: result.error ?? 'Your question is waiting in the conversation.',
+          variant: 'destructive',
+        });
+        navigate(`${path}?q=${encodeURIComponent(variables.question)}`);
+      } else {
+        navigate(path);
+      }
+    },
+    onError: (error) => toast(errorToast(error, 'Could not start the conversation')),
   });
 
   const deleteConversationMutation = useMutation({
@@ -60,197 +96,214 @@ export function WorkspacePage() {
     onError: () => toast({ title: 'Failed to delete', variant: 'destructive' }),
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return api.upload<{ id: string }>('/documents', formData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-      toast({ title: 'Upload started' });
-    },
-    onError: (error: Error) => toast(errorToast(error, 'Upload failed')),
-    onSettled: () => setUploading(false),
-  });
+  const readyCount = documents?.length ?? 0;
+  const selectedDocuments = documents?.filter((d) => scopeIds.includes(d.id)) ?? [];
+  const canAsk = question.trim().length > 0 && readyCount > 0 && !askMutation.isPending;
 
-  const onDrop = (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (file.type !== 'application/pdf') {
-      toast({ title: 'Invalid file type', description: 'Only PDF files are supported', variant: 'destructive' });
-      return;
-    }
-    if (file.size > 25 * 1024 * 1024) {
-      toast({ title: 'File too large', description: 'Maximum file size is 25 MB', variant: 'destructive' });
-      return;
-    }
-    setUploading(true);
-    uploadMutation.mutate(file);
+  const submit = () => {
+    const text = question.trim();
+    if (!text || readyCount === 0 || askMutation.isPending) return;
+    askMutation.mutate({ question: text, documentIds: scopeIds });
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
-    maxSize: 25 * 1024 * 1024,
-    disabled: uploading,
-  });
+  const toggleScope = (id: string) => {
+    setScopeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Workspace</h1>
-          <p className="text-muted-foreground">Your research conversations</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowNewConversation(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            New Research
-          </button>
-          <div {...getRootProps()} className={cn(
-            'relative flex items-center justify-center rounded-lg border-2 border-dashed p-3 transition-colors',
-            isDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-          )}>
-            <input {...getInputProps()} />
-            <div className="flex flex-col items-center gap-1 text-center">
-              <FileText className="h-6 w-6 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Drop PDF</span>
-            </div>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Ask</h1>
+        <p className="text-muted-foreground">
+          Ask a question about your documents, then check how well the answer is backed.
+        </p>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Search conversations..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          className="w-full pl-10 h-10 rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      {/* Composer: asking creates the conversation, no naming step */}
+      <section className="surface-card space-y-3 p-5">
+        <label htmlFor="ask-question" className="sr-only">
+          Your question
+        </label>
+        <textarea
+          id="ask-question"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          rows={3}
+          placeholder="What do these documents say about…"
+          className="w-full resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
-      </div>
-
-      {/* Conversation List */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <ConversationSkeleton key={i} />
-          ))}
-        </div>
-      ) : conversations?.content.length === 0 ? (
-        <div className="rounded-xl border p-12 text-center">
-          <MessageSquare className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-          <h3 className="font-semibold mb-2">No conversations yet</h3>
-          <p className="text-muted-foreground mb-6">Start your first research session</p>
-          <button
-            onClick={() => setShowNewConversation(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            New Research
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-3">
-            {conversations!.content.map((conv) => (
-              <ConversationItem
-                key={conv.id}
-                conv={conv}
-                onDelete={() => deleteConversationMutation.mutate(conv.id)}
-              />
-            ))}
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
             <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="h-10 w-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-accent disabled:opacity-50"
+              type="button"
+              onClick={() => setScopeOpen((open) => !open)}
+              aria-expanded={scopeOpen}
+              aria-haspopup="true"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              {selectedDocuments.length === 0
+                ? `All ready documents (${readyCount})`
+                : `${pluralize(selectedDocuments.length, 'document')} selected`}
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             </button>
-            <span className="text-sm text-muted-foreground">
-              Page {page + 1} of {conversations!.totalPages || 1}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min((conversations!.totalPages || 1) - 1, p + 1))}
-              disabled={page >= (conversations!.totalPages || 1) - 1}
-              className="h-10 w-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-accent disabled:opacity-50"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* New Conversation Dialog */}
-      {showNewConversation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowNewConversation(false)}>
-          <div className="bg-background rounded-xl border p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-semibold mb-4">New Research Session</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Title</label>
-                <input
-                  type="text"
-                  value={newConvTitle}
-                  onChange={(e) => setNewConvTitle(e.target.value)}
-                  placeholder="What are you researching?"
-                  className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Documents (optional)</label>
-                <div className="rounded-lg border p-3 max-h-48 overflow-y-auto">
+            {scopeOpen && (
+              <div
+                role="dialog"
+                aria-label="Choose document scope"
+                className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-border bg-background p-3 shadow-lg"
+              >
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Answers draw evidence only from these documents.
+                </p>
+                <div className="max-h-56 space-y-1 overflow-y-auto">
+                  {readyCount === 0 && (
+                    <p className="py-1 text-sm text-muted-foreground">
+                      No ready documents yet — upload a PDF first.
+                    </p>
+                  )}
                   {documents?.map((doc) => (
-                    <label key={doc.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-sm">
                       <input
                         type="checkbox"
-                        checked={selectedDocIds.includes(doc.id)}
-                        onChange={(e) => setSelectedDocIds(e.target.checked ? [...selectedDocIds, doc.id] : selectedDocIds.filter((id) => id !== doc.id))}
+                        checked={scopeIds.includes(doc.id)}
+                        onChange={() => toggleScope(doc.id)}
                         className="rounded border-input"
                       />
-                      <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="truncate">{doc.originalFilename}</span>
-                      {doc.pageCount != null && (
-                        <span className="text-xs text-muted-foreground">({pluralize(doc.pageCount, 'page')})</span>
-                      )}
                     </label>
                   ))}
-                  {documents?.length === 0 && (
-                    <p className="text-sm text-muted-foreground">No processed documents available. Upload a PDF first.</p>
-                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setScopeIds([])}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Use all documents
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScopeOpen(false)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary"
+                  >
+                    <Check className="h-3 w-3" /> Done
+                  </button>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowNewConversation(false)}
-                  className="rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => createConversationMutation.mutate({ title: newConvTitle || 'New Conversation', documentIds: selectedDocIds })}
-                  disabled={createConversationMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {createConversationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  <Sparkles className="h-4 w-4" />
-                  Start Research
-                </button>
-              </div>
-            </div>
+            )}
+          </div>
+          <span className="text-xs text-muted-foreground">Press Enter to ask</span>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!canAsk}
+            className="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {askMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Ask
+          </button>
+        </div>
+        {readyCount === 0 && (
+          <p className="text-sm text-muted-foreground">
+            <Sparkles className="mr-1 inline h-4 w-4 text-primary" aria-hidden="true" />
+            Upload a PDF to ask your first question.{' '}
+            <Link to="/dashboard/documents" className="text-primary hover:underline">
+              Go to the library
+            </Link>
+          </p>
+        )}
+      </section>
+
+      {/* Reuse the one upload surface so a PDF can be added without leaving Ask */}
+      <details className="rounded-xl border border-border bg-card">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+          Add a document
+        </summary>
+        <div className="border-t border-border/70 p-3">
+          <UploadDropzone compact bare />
+        </div>
+      </details>
+
+      {/* Conversations */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">Conversations</h2>
+          <div className="relative w-full max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              placeholder="Search conversations…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              className="h-10 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
           </div>
         </div>
-      )}
+
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <ConversationSkeleton key={i} />
+            ))}
+          </div>
+        ) : conversations?.content.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-10 text-center">
+            <MessageSquare className="mx-auto mb-3 h-12 w-12 text-muted-foreground/50" />
+            <h3 className="font-semibold mb-1">No conversations yet</h3>
+            <p className="text-sm text-muted-foreground">
+              Ask your first question above — it becomes a conversation automatically.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {conversations!.content.map((conv) => (
+                <ConversationItem
+                  key={conv.id}
+                  conv={conv}
+                  onDelete={() => deleteConversationMutation.mutate(conv.id)}
+                />
+              ))}
+            </div>
+
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-input bg-background hover:bg-accent disabled:opacity-50"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1} of {conversations!.totalPages || 1}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min((conversations!.totalPages || 1) - 1, p + 1))}
+                disabled={page >= (conversations!.totalPages || 1) - 1}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-input bg-background hover:bg-accent disabled:opacity-50"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </>
+        )}
+      </section>
 
       <ToastProvider>
         <ToastViewport />
@@ -266,16 +319,16 @@ function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: ()
         to={`/dashboard/workspace/${conv.id}`}
         className="flex min-w-0 flex-1 items-center gap-4 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <MessageSquare className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex-shrink-0 flex items-center justify-center" />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-medium truncate">{conv.title}</h3>
+        <MessageSquare className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary" />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-medium">{conv.title}</h3>
           <p className="text-xs text-muted-foreground">
             {conv.messageCount} messages • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
           </p>
           {conv.documents.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="mt-2 flex flex-wrap gap-1">
               {conv.documents.slice(0, 3).map((d) => (
-                <span key={d.id} className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground bg-muted">
+                <span key={d.id} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   <FileText className="h-3 w-3" />
                   {d.originalFilename}
                 </span>
@@ -290,7 +343,7 @@ function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: ()
       <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <button
           type="button"
-          className="p-2 rounded-lg hover:bg-accent"
+          className="rounded-lg p-2 hover:bg-accent"
           title="Delete"
           aria-label={`Delete ${conv.title}`}
           onClick={onDelete}
@@ -304,13 +357,13 @@ function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: ()
 
 function ConversationSkeleton() {
   return (
-    <div className="animate-pulse flex items-center gap-4 rounded-xl border p-4">
-      <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0" />
+    <div className="flex animate-pulse items-center gap-4 rounded-xl border p-4">
+      <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-muted" />
       <div className="flex-1 space-y-2">
-        <div className="h-4 bg-muted rounded w-1/3" />
-        <div className="h-3 bg-muted rounded w-1/2" />
-        <div className="h-3 bg-muted rounded w-1/4" />
+        <div className="h-4 w-1/3 rounded bg-muted" />
+        <div className="h-3 w-1/2 rounded bg-muted" />
       </div>
     </div>
   );
 }
+
