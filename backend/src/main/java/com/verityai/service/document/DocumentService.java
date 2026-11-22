@@ -367,8 +367,11 @@ public class DocumentService {
 
             log.info("Processed document {}: {} pages, {} chunks", documentId, pageCount, chunks.size());
 
-            // AI summaries are generated asynchronously after indexing succeeds
-            summaryService.schedule(documentId);
+            // Summaries are on-demand by default, so an upload spends no model
+            // call; the Summary tab asks for one when the user opens it.
+            if (summaryService.autoGenerateEnabled()) {
+                summaryService.schedule(documentId);
+            }
 
         } catch (Throwable e) {
             log.error("Failed to process document {}", documentId, e);

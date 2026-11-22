@@ -155,10 +155,6 @@ verityai:
     # Bounded queue of asynchronous graph rebuilds; work beyond this is dropped
     # (logged) and retried at the next startup or explicit rebuild
     queue-capacity: ${KNOWLEDGE_GRAPH_QUEUE_CAPACITY:100}
-    rebuild-max-documents: ${KNOWLEDGE_GRAPH_REBUILD_MAX_DOCUMENTS:10}
-    # Bounds on the graph read model returned by the API
-    max-nodes: ${KNOWLEDGE_GRAPH_MAX_NODES:300}
-    max-edges: ${KNOWLEDGE_GRAPH_MAX_EDGES:4000}
   contradictions:
     # Claim-pair contradiction detection (Feature 8). Explicit, rate-limited runs.
     enabled: ${CONTRADICTION_ENABLED:true}
@@ -179,6 +175,10 @@ verityai:
     password-reset-per-hour-account: ${RATE_LIMIT_PASSWORD_RESET_PER_HOUR_ACCOUNT:3}
   summary:
     enabled: ${SUMMARY_ENABLED:true}
+    # Summaries cost model calls, so they are generated when a user opens the
+    # Summary tab (or asks for one), not for every upload. Set true to restore
+    # the old generate-on-upload behaviour.
+    auto-generate: ${SUMMARY_AUTO_GENERATE:false}
     # Optional dedicated model for summaries; empty = use GROQ_MODEL
     model: ${SUMMARY_MODEL:}
     # Documents longer than this go through hierarchical segment condensation

@@ -37,6 +37,19 @@ class SummaryServiceQueueTest {
     @Mock private LlmService llmService;
 
     @Test
+    void uploadsDoNotQueueSummariesUnlessAutoGenerateIsEnabled() {
+        SummaryService service = new SummaryService(
+            documentRepository, chunkRepository, summaryRepository,
+            llmService, new ObjectMapper());
+        ReflectionTestUtils.setField(service, "enabled", true);
+        ReflectionTestUtils.setField(service, "autoGenerate", false);
+        assertThat(service.autoGenerateEnabled()).isFalse();
+
+        ReflectionTestUtils.setField(service, "autoGenerate", true);
+        assertThat(service.autoGenerateEnabled()).isTrue();
+    }
+
+    @Test
     void schedule_whenQueueIsFull_marksDocumentPendingForBackfill() throws Exception {
         SummaryService service = new SummaryService(
             documentRepository, chunkRepository, summaryRepository,

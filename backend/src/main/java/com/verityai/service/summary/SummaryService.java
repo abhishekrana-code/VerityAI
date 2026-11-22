@@ -87,6 +87,14 @@ public class SummaryService {
     @Value("${verityai.summary.enabled:true}")
     private boolean enabled;
 
+    /**
+     * Whether an upload should queue a summary. Off by default: summaries cost
+     * model calls, so they are generated when the user opens the Summary tab or
+     * asks for one (which calls {@link #regenerate(UUID)} directly).
+     */
+    @Value("${verityai.summary.auto-generate:false}")
+    private boolean autoGenerate;
+
     /** Below this many characters the whole document goes to the LLM in one call. */
     @Value("${verityai.summary.single-pass-chars:48000}")
     private int singlePassChars;
@@ -128,6 +136,11 @@ public class SummaryService {
         if (queue != null) {
             queue.shutdown();
         }
+    }
+
+    /** True when uploads should queue a summary without the user asking. */
+    public boolean autoGenerateEnabled() {
+        return enabled && autoGenerate;
     }
 
     /**

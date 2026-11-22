@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -139,6 +139,17 @@ export function DocumentDetailPage() {
     },
     onError: (err: Error) => toast({ title: 'Could not regenerate', description: err.message, variant: 'destructive' }),
   });
+
+  // Summaries are on-demand: opening the tab is the request, so a document
+  // with no summary is generated once instead of on upload.
+  const summaryRequested = useRef(false);
+  useEffect(() => {
+    if (tab !== 'summary' || doc?.status !== 'READY') return;
+    if (summariesLoading || !summaries || summaries.summaryStatus !== 'NONE') return;
+    if (summaryRequested.current || regenerateMutation.isPending) return;
+    summaryRequested.current = true;
+    regenerateMutation.mutate();
+  }, [tab, doc?.status, summaries, summariesLoading, regenerateMutation]);
 
   if (isLoading) {
     return (
