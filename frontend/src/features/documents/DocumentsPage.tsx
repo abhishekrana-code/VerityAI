@@ -40,6 +40,7 @@ const SORT_OPTIONS = [
 
 export function DocumentsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [page, setPage] = useState(0);
   const [size] = useState(20);
