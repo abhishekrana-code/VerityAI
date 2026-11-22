@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Message, type MessageListResponse, type Conversation, type Document, type Citation, type ClaimVerificationResponse } from '@/lib/api';
+import { api, type Message, type MessageListResponse, type Conversation, type Document, type Citation, type ClaimVerificationResponse, type DocumentSummariesResponse } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
 import { ArrowLeft, ArrowUpRight, Send, Loader2, Copy, Check, AlertCircle, FileText, MoreVertical, Sparkles, Plus, X, ShieldCheck } from 'lucide-react';
 import { cn, pluralize } from '@/lib/utils';
@@ -12,6 +12,12 @@ import { Markdown } from '@/components/ui/Markdown';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
+
+const GENERIC_STARTERS = [
+  'Summarize the main points',
+  'What figures and dates are mentioned?',
+  'What are the main conclusions?',
+];
 
 export function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -104,6 +110,17 @@ export function ConversationPage() {
     enabled: showContextPicker,
   });
 
+  // Suggested questions come from the first document's summary, when one
+  // exists. Without a summary the generic starters below are used instead, so
+  // the empty state never blocks on AI work.
+  const firstDocumentId = conversation?.documents[0]?.id;
+  const { data: firstDocumentSummaries } = useQuery({
+    queryKey: ['document-summaries', firstDocumentId],
+    queryFn: () => api.get<DocumentSummariesResponse>(`/documents/${firstDocumentId}/summaries`),
+    enabled: !!firstDocumentId,
+    staleTime: 60_000,
+  });
+
   const updateContextMutation = useMutation({
     mutationFn: (documentIds: string[]) =>
       api.patch<Conversation>(`/conversations/${conversationId}`, { documentIds }),
@@ -167,6 +184,19 @@ export function ConversationPage() {
       conversation.documents.filter((d) => d.id !== id).map((d) => d.id)
     );
   };
+
+  const suggestedQuestions = (() => {
+    const section = firstDocumentSummaries?.summaries.find(
+      (s) => s.kind === 'SUGGESTED_QUESTIONS',
+    );
+    const questions = (section?.content as { questions?: unknown } | undefined)?.questions;
+    return Array.isArray(questions)
+      ? questions.filter((q): q is string => typeof q === 'string').slice(0, 3)
+      : [];
+  })();
+  const starters = suggestedQuestions.length > 0
+    ? suggestedQuestions
+    : GENERIC_STARTERS;
 
   const openCitation = (cite: Citation) => {
     setPreview({
@@ -275,10 +305,27 @@ export function ConversationPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : messagesData?.content.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center text-muted-foreground">
-            <Sparkles className="h-16 w-16 mb-4 opacity-30" />
-            <h3 className="text-lg font-medium mb-2">No messages yet</h3>
-            <p>Ask a question about your documents to start researching</p>
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Sparkles className="h-12 w-12 mb-4 text-primary/40" />
+            <h3 className="text-lg font-medium mb-1">Ask your first question</h3>
+            <p className="mb-5 text-sm text-muted-foreground">
+              {suggestedQuestions.length > 0
+                ? 'Suggested from this document’s summary'
+                : 'Answers will cite the passage they came from'}
+            </p>
+            <div className="flex w-full max-w-lg flex-col gap-2">
+              {starters.map((starter) => (
+                <button
+                  key={starter}
+                  type="button"
+                  onClick={() => askMutation.mutate(starter)}
+                  disabled={askMutation.isPending}
+                  className="rounded-xl border border-border bg-card px-4 py-2.5 text-left text-sm transition-colors hover:border-primary/40 hover:bg-accent/50 disabled:opacity-50"
+                >
+                  {starter}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
