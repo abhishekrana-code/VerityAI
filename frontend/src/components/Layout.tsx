@@ -1,35 +1,30 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useLogout } from '@/hooks/useAuth';
 import { ThemeToggle } from './ThemeToggle';
 import { Logo } from './Logo';
 import {
   LayoutDashboard, FolderOpen, MessageSquare, Settings, LogOut,
-  ChevronLeft, ChevronRight, Menu, X, Plus, Search,
-  Network, ShieldCheck, FileBarChart, History,
+  ChevronLeft, ChevronRight, Menu, X, Plus, Search, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
+// Four destinations only: the core Upload → Ask → Check loop. Search stays in
+// the header, Settings in the account menu, and the retired pages redirect to
+// the Library.
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, end: true },
-  { name: 'Documents', href: '/dashboard/documents', icon: FolderOpen },
-  { name: 'Search', href: '/dashboard/search', icon: Search },
-  { name: 'Research workspace', href: '/dashboard/workspace', icon: MessageSquare },
-  { name: 'Knowledge graph', href: '/dashboard/knowledge-graph', icon: Network },
+  { name: 'Home', href: '/dashboard', icon: LayoutDashboard, end: true },
+  { name: 'Library', href: '/dashboard/documents', icon: FolderOpen },
+  { name: 'Ask', href: '/dashboard/workspace', icon: MessageSquare },
   { name: 'Checks', href: '/dashboard/verification', icon: ShieldCheck },
-  { name: 'Reports', href: '/dashboard/reports', icon: FileBarChart },
-  { name: 'History', href: '/dashboard/history', icon: History },
 ];
 
 const pageNames: Record<string, string> = {
-  '/dashboard': 'Dashboard',
+  '/dashboard': 'Home',
   '/dashboard/search': 'Search',
-  '/dashboard/documents': 'Documents',
-  '/dashboard/workspace': 'Research workspace',
-  '/dashboard/knowledge-graph': 'Knowledge graph',
+  '/dashboard/documents': 'Library',
+  '/dashboard/workspace': 'Ask',
   '/dashboard/verification': 'Checks',
-  '/dashboard/reports': 'Reports',
-  '/dashboard/history': 'History',
   '/dashboard/settings': 'Settings',
 };
 
@@ -115,25 +110,9 @@ export function Layout() {
             >
               <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
               <span className={!sidebarOpen ? 'lg:hidden' : ''}>{item.name}</span>
-              {item.name === 'Research workspace' && sidebarOpen && <span className="ml-auto rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">AI</span>}
+              {item.name === 'Ask' && sidebarOpen && <span className="ml-auto rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">AI</span>}
             </NavLink>
           ))}
-
-          <div className={cn('my-6 border-t border-border/70', !sidebarOpen && 'lg:my-4')} />
-          <p className={cn('eyebrow mb-3 px-3', !sidebarOpen && 'lg:hidden')}>Account</p>
-          <NavLink
-            to="/dashboard/settings"
-            title={!sidebarOpen ? 'Settings' : undefined}
-            className={({ isActive }) => cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all',
-              isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              !sidebarOpen && 'lg:justify-center lg:px-0'
-            )}
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            <Settings className="h-[18px] w-[18px] shrink-0" />
-            <span className={!sidebarOpen ? 'lg:hidden' : ''}>Settings</span>
-          </NavLink>
         </nav>
 
         <div className="border-t border-border/70 p-3">
@@ -143,11 +122,19 @@ export function Layout() {
               <p className="truncate text-xs font-semibold text-foreground">{displayName}</p>
               <p className="truncate text-[10px] text-muted-foreground">{auth?.user?.email}</p>
             </div>
+            <Link to="/dashboard/settings" onClick={() => setMobileMenuOpen(false)} className={cn('rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground', !sidebarOpen && 'lg:hidden')} title="Settings" aria-label="Settings">
+              <Settings className="h-4 w-4" />
+            </Link>
             <button onClick={handleLogout} disabled={logout.isPending} className={cn('rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-destructive disabled:opacity-50', !sidebarOpen && 'lg:hidden')} title="Sign out" aria-label="Sign out">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
-          {!sidebarOpen && <button onClick={handleLogout} disabled={logout.isPending} className="mt-2 hidden w-full justify-center rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-rose-700 dark:hover:text-rose-300 lg:flex" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>}
+          {!sidebarOpen && (
+            <div className="mt-2 hidden justify-center gap-1 lg:flex">
+              <Link to="/dashboard/settings" className="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground" title="Settings" aria-label="Settings"><Settings className="h-4 w-4" /></Link>
+              <button onClick={handleLogout} disabled={logout.isPending} className="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-rose-700 dark:hover:text-rose-300" aria-label="Sign out"><LogOut className="h-4 w-4" /></button>
+            </div>
+          )}
         </div>
       </aside>
 

@@ -20,10 +20,7 @@ const DocumentDetailPage = lazy(() => import('@/features/documents/DocumentDetai
 const WorkspacePage = lazy(() => import('@/features/workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage })));
 const ConversationPage = lazy(() => import('@/features/workspace/ConversationPage').then((m) => ({ default: m.ConversationPage })));
 const SearchPage = lazy(() => import('@/features/search/SearchPage').then((m) => ({ default: m.SearchPage })));
-const KnowledgeGraphPage = lazy(() => import('@/features/knowledge-graph/KnowledgeGraphPage').then((m) => ({ default: m.KnowledgeGraphPage })));
 const VerificationPage = lazy(() => import('@/features/verification/VerificationPage').then((m) => ({ default: m.VerificationPage })));
-const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
-const HistoryPage = lazy(() => import('@/features/history/HistoryPage').then((m) => ({ default: m.HistoryPage })));
 const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const DashboardNotFoundPage = lazy(() => import('@/features/not-found/DashboardNotFoundPage').then((m) => ({ default: m.DashboardNotFoundPage })));
 
@@ -126,10 +123,12 @@ export function App() {
             <Route path="documents/:id" element={<DocumentDetailPage />} />
             <Route path="workspace" element={<WorkspacePage />} />
             <Route path="workspace/:conversationId" element={<ConversationPage />} />
-            <Route path="knowledge-graph" element={<KnowledgeGraphPage />} />
             <Route path="verification" element={<VerificationPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="history" element={<HistoryPage />} />
+            {/* Retired pages keep their old URLs working: bookmarks and any
+                stale link land in the Library instead of a dead page. */}
+            <Route path="knowledge-graph" element={<Navigate to="/dashboard/documents" replace />} />
+            <Route path="reports" element={<Navigate to="/dashboard/documents" replace />} />
+            <Route path="history" element={<Navigate to="/dashboard/documents" replace />} />
             <Route path="settings" element={<SettingsPage />} />
             {/* Unknown paths inside the app shell get an explanation, not a blank page. */}
             <Route path="*" element={<DashboardNotFoundPage />} />
