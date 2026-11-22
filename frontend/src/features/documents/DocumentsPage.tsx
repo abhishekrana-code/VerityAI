@@ -7,19 +7,20 @@ import {
   api,
   type Document,
   type DocumentListResponse,
-  type DocumentUploadResponse,
   type BulkDeleteResponse,
   type Collection,
   type Tag,
 } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
+import { askAboutDocument } from '@/lib/conversation';
 import {
-  Upload, FileText, Loader2, Search, Trash2, RotateCcw, ChevronLeft, ChevronRight,
-  Clock, CheckCircle, AlertCircle, LayoutGrid, List, X, FolderPlus, Eye,
+  FileText, Loader2, Search, Trash2, RotateCcw, ChevronLeft, ChevronRight,
+  AlertCircle, LayoutGrid, List, X, FolderPlus, Eye, Sparkles,
 } from 'lucide-react';
 import { cn, formatFileSize, pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { useDropzone, type FileRejection } from 'react-dropzone';
+import { UploadDropzone } from '@/components/UploadDropzone';
+import { ProcessingStepper } from '@/components/ProcessingStepper';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/hooks/useToast';
@@ -37,8 +38,6 @@ const SORT_OPTIONS = [
   { value: 'status,asc', label: 'Status A–Z' },
 ] as const;
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
 export function DocumentsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -50,8 +49,6 @@ export function DocumentsPage() {
   const [collectionFilter, setCollectionFilter] = useState('');
   const [sort, setSort] = useState('date,desc');
   const [view, setView] = useState<'grid' | 'list'>('grid');
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadingName, setUploadingName] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
@@ -91,29 +88,13 @@ export function DocumentsPage() {
     queryFn: () => api.get<Collection[]>('/collections'),
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return api.uploadWithProgress<DocumentUploadResponse>(
-        '/documents', formData, setUploadProgress
-      );
+  const askAboutMutation = useMutation({
+    mutationFn: (doc: Document) => askAboutDocument(doc.id, doc.originalFilename),
+    onSuccess: (conversation) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      navigate(`/dashboard/workspace/${conversation.id}`);
     },
-    onSuccess: (_result, file) => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-      toast({
-        title: 'PDF uploaded successfully',
-        description: `${file.name} is queued for processing.`,
-        variant: 'success',
-      });
-    },
-    onError: (error: Error, file) => {
-      toast(errorToast(error, `Could not upload ${file.name}`));
-    },
-    onSettled: () => {
-      setUploadProgress(null);
-      setUploadingName(null);
-    },
+    onError: (error: Error) => toast(errorToast(error, 'Could not start a conversation')),
   });
 
   const retryMutation = useMutation({
@@ -175,59 +156,6 @@ export function DocumentsPage() {
       setAddToCollectionOpen(false);
     },
     onError: (error: Error) => toast(errorToast(error, 'Could not create collection')),
-  });
-
-  const uploading = uploadProgress !== null || uploadMutation.isPending;
-
-  const onDrop = (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
-    setUploadingName(file.name);
-    setUploadProgress(0);
-    uploadMutation.mutate(file);
-  };
-
-  // react-dropzone rejects a drop before any request is made, so explain why
-  // instead of leaving the drop with no visible result.
-  const onDropRejected = (rejections: FileRejection[]) => {
-    const rejection = rejections[0];
-    if (!rejection) return;
-    const name = rejection.file.name;
-    const code = rejection.errors[0]?.code;
-    if (code === 'file-too-large') {
-      toast({
-        title: 'PDF too large',
-        description: `${name} is larger than the 25 MB limit.`,
-        variant: 'destructive',
-      });
-    } else if (code === 'file-invalid-type') {
-      toast({
-        title: 'Not a PDF',
-        description: `${name} was not uploaded — only PDF files are supported.`,
-        variant: 'destructive',
-      });
-    } else if (code === 'too-many-files') {
-      toast({
-        title: 'One file at a time',
-        description: 'Drop a single PDF to upload it.',
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: 'Upload rejected',
-        description: rejection.errors[0]?.message ?? `${name} could not be uploaded.`,
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    onDropRejected,
-    accept: { 'application/pdf': ['.pdf'] },
-    maxSize: MAX_FILE_SIZE,
-    multiple: false,
-    disabled: uploading,
   });
 
   const docs = useMemo(() => data?.content ?? [], [data]);
@@ -309,35 +237,8 @@ export function DocumentsPage() {
         </div>
       </div>
 
-      {/* Upload dropzone */}
-      <div {...getRootProps()} className={cn(
-        'relative flex items-center justify-center rounded-lg border-2 border-dashed p-5 transition-colors cursor-pointer',
-        isDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50',
-        uploading && 'pointer-events-none opacity-70'
-      )}>
-        <input {...getInputProps()} aria-label="Upload PDF" />
-        <div className="flex flex-col items-center gap-2 text-center">
-          {uploading ? <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            : <Upload className="h-8 w-8 text-muted-foreground" />}
-          <p className="text-sm font-medium">
-            {uploading
-              ? (uploadProgress !== null
-                ? `Uploading ${uploadingName ?? 'PDF'}… ${uploadProgress}%`
-                : `Starting upload of ${uploadingName ?? 'PDF'}…`)
-              : isDragActive ? 'Drop PDF here' : 'Drag & drop PDF or click to upload'}
-          </p>
-          <p className="text-xs text-muted-foreground">Max 25 MB • PDF only</p>
-          {uploading && (
-            <div className="w-56 h-1.5 rounded-full bg-muted overflow-hidden" role="progressbar"
-              aria-valuenow={uploadProgress ?? 0} aria-valuemin={0} aria-valuemax={100}>
-              <div
-                className="h-full bg-primary transition-all duration-200"
-                style={{ width: `${uploadProgress ?? 5}%` }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+      {/* One shared upload surface (also used on Home and Ask) */}
+      <UploadDropzone />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -482,14 +383,10 @@ export function DocumentsPage() {
             </button>
           </div>
         ) : (
-          <div {...getRootProps()} className={cn(
-            'relative rounded-xl border-2 border-dashed p-12 text-center transition-colors',
-            isDragActive ? 'border-primary bg-primary/5' : 'border-border'
-          )}>
-            <input {...getInputProps()} />
+          <div className="rounded-xl border border-dashed p-12 text-center">
             <FileText className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
-            <p className="text-muted-foreground mb-4">Drag & drop a PDF or click to upload your first document</p>
+            <p className="text-muted-foreground">Drop a PDF above, or click the upload area to choose a file.</p>
           </div>
         )
       ) : view === 'grid' ? (
@@ -502,6 +399,7 @@ export function DocumentsPage() {
               onToggle={() => toggleSelected(doc.id)}
               onRetry={() => retryMutation.mutate(doc.id)}
               onDelete={() => setConfirmDelete({ ids: [doc.id], label: `"${doc.originalFilename}"` })}
+              onAsk={() => askAboutMutation.mutate(doc)}
             />
           ))}
         </div>
@@ -512,6 +410,7 @@ export function DocumentsPage() {
           onToggle={toggleSelected}
           onRetry={(id) => retryMutation.mutate(id)}
           onDelete={(doc) => setConfirmDelete({ ids: [doc.id], label: `"${doc.originalFilename}"` })}
+          onAsk={(doc) => askAboutMutation.mutate(doc)}
         />
       )}
 
@@ -665,35 +564,22 @@ export function DocumentsPage() {
   );
 }
 
-function StatusBadge({ status, size = 'sm' }: { status: Document['status']; size?: 'sm' | 'md' }) {
-  const variants: Record<Document['status'], string> = {
-    UPLOADED: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    PROCESSING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-    READY: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    FAILED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  };
-  const icons = { UPLOADED: Clock, PROCESSING: Loader2, READY: CheckCircle, FAILED: AlertCircle };
-  const Icon = icons[status];
-  return (
-    <span className={cn(
-      'inline-flex items-center gap-1.5 rounded-full font-medium whitespace-nowrap',
-      size === 'md' ? 'px-3 py-1 text-sm' : 'px-2.5 py-0.5 text-xs',
-      variants[status]
-    )}>
-      <Icon className={cn('h-3 w-3', status === 'PROCESSING' && 'animate-spin')} />
-      {status}
-    </span>
-  );
-}
+const SUMMARY_LABELS: Record<string, string> = {
+  PENDING: 'generating',
+  READY: 'ready',
+  FAILED: 'failed',
+  NONE: 'not generated',
+};
 
 function DocumentCard({
-  doc, selected, onToggle, onRetry, onDelete,
+  doc, selected, onToggle, onRetry, onDelete, onAsk,
 }: {
   doc: Document;
   selected: boolean;
   onToggle: () => void;
   onRetry: () => void;
   onDelete: () => void;
+  onAsk: () => void;
 }) {
   const navigate = useNavigate();
 
@@ -723,7 +609,9 @@ function DocumentCard({
           className="h-4 w-4 mt-1 rounded border-input accent-primary flex-shrink-0"
         />
         <FileText className="h-9 w-9 text-muted-foreground/50 group-hover:text-primary/50 transition-colors flex-shrink-0" />
-        <div className="ml-auto"><StatusBadge status={doc.status} /></div>
+        <div className="ml-auto">
+          <ProcessingStepper compact status={doc.status} stage={doc.processingStage} />
+        </div>
       </div>
       <h3 className="font-medium truncate mb-1" title={doc.originalFilename}>{doc.originalFilename}</h3>
       <p className="text-xs text-muted-foreground mb-2">
@@ -731,6 +619,12 @@ function DocumentCard({
         {formatFileSize(doc.sizeBytes)} •{' '}
         {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
       </p>
+      {/* Summary is a separate, non-blocking job: asking works without it. */}
+      {doc.status === 'READY' && (
+        <p className="mb-2 text-[11px] text-muted-foreground">
+          Summary: {SUMMARY_LABELS[doc.summaryStatus ?? 'NONE'] ?? doc.summaryStatus}
+        </p>
+      )}
       {(doc.tags?.length || doc.collections?.length) ? (
         <div className="flex flex-wrap gap-1.5 mb-2">
           {doc.tags?.map((t) => (
@@ -752,6 +646,16 @@ function DocumentCard({
         </div>
       )}
       <div className="flex items-center justify-end gap-2 pt-2 border-t">
+        {doc.status === 'READY' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAsk(); }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+            title="Ask about this document"
+            aria-label={`Ask about ${doc.originalFilename}`}
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Ask
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); navigate(`/dashboard/documents/${doc.id}`); }}
           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -781,13 +685,14 @@ function DocumentCard({
 }
 
 function DocumentTable({
-  docs, selected, onToggle, onRetry, onDelete,
+  docs, selected, onToggle, onRetry, onDelete, onAsk,
 }: {
   docs: Document[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onRetry: (id: string) => void;
   onDelete: (doc: Document) => void;
+  onAsk: (doc: Document) => void;
 }) {
   const navigate = useNavigate();
 
@@ -839,7 +744,7 @@ function DocumentTable({
                     </p>
                   )}
                 </td>
-                <td className="p-3"><StatusBadge status={doc.status} /></td>
+                <td className="p-3"><ProcessingStepper compact status={doc.status} stage={doc.processingStage} /></td>
                 <td className="p-3 text-muted-foreground hidden sm:table-cell">
                   {formatFileSize(doc.sizeBytes)}
                 </td>
@@ -861,6 +766,16 @@ function DocumentTable({
                 </td>
                 <td className="p-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   <div className="inline-flex items-center gap-1">
+                    {doc.status === 'READY' && (
+                      <button
+                        onClick={() => onAsk(doc)}
+                        aria-label={`Ask about ${doc.originalFilename}`}
+                        title="Ask about this document"
+                        className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </button>
+                    )}
                     {doc.status !== 'READY' && (
                       <button
                         onClick={() => onRetry(doc.id)}
