@@ -15,10 +15,12 @@ import {
   type Conversation,
 } from '@/lib/api';
 import {
-  ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle,
+  ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle, MessageSquare,
   Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, ArrowUpRight, Network, FileBarChart,
 } from 'lucide-react';
 import { cn, formatFileSize, isDeferredStatus, pluralize } from '@/lib/utils';
+import { ProcessingStepper } from '@/components/ProcessingStepper';
+import { askAboutDocument } from '@/lib/conversation';
 import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -26,6 +28,13 @@ import { PdfPreviewModal } from '@/components/PdfPreviewModal';
 import { useToast } from '@/hooks/useToast';
 
 type Tab = 'summary' | 'processing' | 'details';
+
+const SUMMARY_STATUS_LABELS: Record<string, string> = {
+  NONE: 'not generated',
+  PENDING: 'generating',
+  READY: 'ready',
+  FAILED: 'failed',
+};
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,6 +105,18 @@ export function DocumentDetailPage() {
       toast({ title: 'Could not start research', description: err.message, variant: 'destructive' }),
   });
 
+  // One click opens a conversation already scoped to this document, so a READY
+  // document is immediately askable instead of being a dead end.
+  const askAboutMutation = useMutation({
+    mutationFn: (doc: Document) => askAboutDocument(doc.id, doc.originalFilename),
+    onSuccess: (conversation) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      navigate(`/dashboard/workspace/${conversation.id}`);
+    },
+    onError: (err: Error) =>
+      toast({ title: 'Could not start a conversation', description: err.message, variant: 'destructive' }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => api.delete<void>(`/documents/${id}`),
     onSuccess: () => {
@@ -161,15 +182,30 @@ export function DocumentDetailPage() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold truncate">{doc.originalFilename}</h1>
-            <StatusBadge status={doc.status} />
+            <ProcessingStepper status={doc.status} stage={doc.processingStage} />
           </div>
           <p className="text-muted-foreground text-sm">
             {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
             {formatFileSize(doc.sizeBytes)} •
             uploaded {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
+            {doc.status === 'READY' && (
+              <> • Summary: {SUMMARY_STATUS_LABELS[doc.summaryStatus ?? 'NONE'] ?? 'not generated'}</>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {doc.status === 'READY' && (
+            <button
+              onClick={() => askAboutMutation.mutate(doc)}
+              disabled={askAboutMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {askAboutMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <MessageSquare className="h-4 w-4" />}
+              Ask about this document
+            </button>
+          )}
           {doc.status === 'READY' && (
             <>
               <Link
@@ -944,19 +980,3 @@ function Row({ label, value, mono, truncate }: { label: string; value: string; m
 // research workspace for citation jumps).
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: Document['status'] }) {
-  const variants: Record<Document['status'], string> = {
-    UPLOADED: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    PROCESSING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-    READY: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    FAILED: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  };
-  const icons = { UPLOADED: Clock, PROCESSING: Loader2, READY: CheckCircle, FAILED: AlertCircle };
-  const Icon = icons[status];
-  return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap', variants[status])}>
-      <Icon className={cn('h-4 w-4', status === 'PROCESSING' && 'animate-spin')} />
-      {status}
-    </span>
-  );
-}
