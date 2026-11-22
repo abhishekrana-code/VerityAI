@@ -28,6 +28,10 @@ public interface DocumentRepository extends JpaRepository<Document, UUID>, JpaSp
 
     Optional<Document> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
 
+    /** Every document a user owns, including soft-deleted rows (account deletion). */
+    @Query("SELECT d FROM Document d WHERE d.user.id = :userId")
+    List<Document> findAllByUserIdIncludingDeleted(@Param("userId") UUID userId);
+
     Optional<Document> findByUserIdAndSha256AndDeletedAtIsNull(UUID userId, String sha256);
 
     List<Document> findByUserIdAndStatusInAndDeletedAtIsNull(UUID userId, List<Document.DocumentStatus> statuses);
