@@ -93,7 +93,7 @@ export class ApiClient {
         requestId: response.headers.get('X-Request-ID') || '',
         fieldErrors: errorData.fieldErrors,
       };
-      throw new ApiException(apiError);
+      throw new ApiException(apiError, parseRetryAfter(response.headers.get('Retry-After')));
     }
 
     if (!isJson) {
@@ -174,7 +174,7 @@ export class ApiClient {
         requestId: response.headers.get('X-Request-ID') || '',
         fieldErrors: errorData.fieldErrors,
       };
-      throw new ApiException(apiError);
+      throw new ApiException(apiError, parseRetryAfter(response.headers.get('Retry-After')));
     }
 
     if (!isJson) {
@@ -247,7 +247,10 @@ export class ApiClient {
         requestId: xhr.getResponseHeader('X-Request-ID') || '',
         fieldErrors: errorData.fieldErrors as ApiError['fieldErrors'],
       };
-      throw new ApiException(apiError);
+      throw new ApiException(
+        apiError,
+        parseRetryAfter(xhr.getResponseHeader('Retry-After')),
+      );
     }
 
     if (!isJson) {
@@ -265,7 +268,11 @@ class NetworkUploadError extends Error {
 }
 
 export class ApiException extends Error {
-  constructor(public readonly error: ApiError) {
+  constructor(
+    public readonly error: ApiError,
+    /** Seconds to wait before retrying (from Retry-After on 429s), when sent. */
+    public readonly retryAfterSeconds: number | null = null,
+  ) {
     super(error.message);
     this.name = 'ApiException';
   }
@@ -281,6 +288,12 @@ export class ApiException extends Error {
   get fieldErrors(): ApiError['fieldErrors'] {
     return this.error.fieldErrors;
   }
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
 export const api = new ApiClient();

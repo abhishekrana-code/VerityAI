@@ -20,7 +20,8 @@ test.describe('document upload', () => {
     });
 
     await expect(page.getByText('Upload started', { exact: true })).toBeVisible();
-    await expect(page.getByText(filename)).toBeVisible();
+    // The library card (a link), not just the per-file progress row.
+    await expect(page.getByRole('link').filter({ hasText: filename })).toBeVisible();
   });
 
   test('rejects a non-PDF payload disguised as a .pdf', async ({ page }) => {
@@ -36,6 +37,7 @@ test.describe('document upload', () => {
     await expect(
       page.getByText(/File is not a valid PDF|Only PDF files are supported/).first(),
     ).toBeVisible();
-    await expect(page.getByText(filename)).toHaveCount(0);
+    // The failed file is reported in the upload list but never becomes a card.
+    await expect(page.getByRole('link').filter({ hasText: filename })).toHaveCount(0);
   });
 });
