@@ -31,6 +31,8 @@ public class KnowledgeEntityIndexResponse {
         /** Mentions added up across every document. */
         private int mentionCount;
         private int documentCount;
+        /** Best passage where the entity appears, so a row can be opened. */
+        private String evidenceExcerpt;
         private List<DocumentRef> documents;
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   api,
@@ -16,19 +16,20 @@ import {
 } from '@/lib/api';
 import {
   ArrowLeft, Loader2, RotateCcw, Trash2, FileText, Clock, CheckCircle, AlertCircle, MessageSquare,
-  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, ArrowUpRight, Network, Download,
+  Sparkles, RefreshCw, Eye, X, Plus, Tag as TagIcon, Folder, ArrowUpRight, Download,
 } from 'lucide-react';
 import { cn, formatFileSize, isDeferredStatus, pluralize } from '@/lib/utils';
 import { ProcessingStepper } from '@/components/ProcessingStepper';
 import { askAboutDocument } from '@/lib/conversation';
 import { summaryToMarkdown } from '@/lib/summaryMarkdown';
+import { DocumentEntitiesTab } from './DocumentEntitiesTab';
 import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PdfPreviewModal } from '@/components/PdfPreviewModal';
 import { useToast } from '@/hooks/useToast';
 
-type Tab = 'summary' | 'processing' | 'details';
+type Tab = 'summary' | 'entities' | 'processing' | 'details';
 
 const SUMMARY_STATUS_LABELS: Record<string, string> = {
   NONE: 'not generated',
@@ -45,6 +46,7 @@ export function DocumentDetailPage() {
   const [tab, setTab] = useState<Tab>('summary');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPage, setPreviewPage] = useState(1);
 
   const { data: doc, isLoading, error } = useQuery({
     queryKey: ['document', id],
@@ -178,6 +180,7 @@ export function DocumentDetailPage() {
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: 'summary', label: 'Summary' },
+    { key: 'entities', label: 'Entities' },
     { key: 'processing', label: 'Processing' },
     { key: 'details', label: 'Details' },
   ];
@@ -219,16 +222,6 @@ export function DocumentDetailPage() {
                 : <MessageSquare className="h-4 w-4" />}
               Ask about this document
             </button>
-          )}
-          {doc.status === 'READY' && (
-            <>
-              <Link
-                to={`/dashboard/knowledge-graph?documentId=${doc.id}`}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-              >
-                <Network className="h-4 w-4" /> Knowledge graph
-              </Link>
-            </>
           )}
           {doc.status === 'READY' && !!summaries?.summaries.length && (
             <button
@@ -292,6 +285,16 @@ export function DocumentDetailPage() {
         />
       )}
 
+      {tab === 'entities' && (
+        <DocumentEntitiesTab
+          documentId={doc.id}
+          onOpenPage={(page) => {
+            setPreviewPage(page);
+            setPreviewOpen(true);
+          }}
+        />
+      )}
+
       {tab === 'processing' && (
         <ProcessingTab
           doc={doc}
@@ -315,7 +318,9 @@ export function DocumentDetailPage() {
       />
 
       {/* PDF preview */}
-      {previewOpen && <PdfPreviewModal doc={doc} onClose={() => setPreviewOpen(false)} />}
+      {previewOpen && (
+        <PdfPreviewModal doc={doc} initialPage={previewPage} onClose={() => setPreviewOpen(false)} />
+      )}
 
       <ToastProvider>
         <ToastViewport />

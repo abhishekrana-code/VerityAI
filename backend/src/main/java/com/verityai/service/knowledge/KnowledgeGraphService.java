@@ -511,6 +511,11 @@ public class KnowledgeGraphService {
             Map<String, Set<UUID>> documentsByName = new LinkedHashMap<>();
             Map<String, String> displayNames = new LinkedHashMap<>();
             for (KnowledgeEntity entity : rows) {
+                // A shared year or two-letter code says nothing about how two
+                // documents relate, so it must not create a connection.
+                if (EntityNoiseFilter.isNoise(entity.getName(), entity.getEntityType())) {
+                    continue;
+                }
                 UUID docId = entity.getDocument().getId();
                 documentNames.putIfAbsent(docId, entity.getDocument().getOriginalFilename());
                 documentsByName.computeIfAbsent(entity.getNormalizedName(), key -> new LinkedHashSet<>()).add(docId);
@@ -603,6 +608,7 @@ public class KnowledgeGraphService {
         item.setType(primary.getEntityType().name());
         item.setMentionCount(mentions);
         item.setDocumentCount(documents.size());
+        item.setEvidenceExcerpt(primary.getEvidenceExcerpt());
         item.setDocuments(new ArrayList<>(documents.values()));
         return item;
     }

@@ -359,6 +359,7 @@ export interface KnowledgeEntityIndexItem {
   type: KnowledgeEntityType;
   mentionCount: number;
   documentCount: number;
+  evidenceExcerpt: string | null;
   documents: KnowledgeEntityDocumentRef[];
 }
 
