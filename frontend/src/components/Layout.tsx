@@ -16,7 +16,7 @@ const navigation = [
   { name: 'Search', href: '/dashboard/search', icon: Search },
   { name: 'Research workspace', href: '/dashboard/workspace', icon: MessageSquare },
   { name: 'Knowledge graph', href: '/dashboard/knowledge-graph', icon: Network },
-  { name: 'Verification', href: '/dashboard/verification', icon: ShieldCheck },
+  { name: 'Checks', href: '/dashboard/verification', icon: ShieldCheck },
   { name: 'Reports', href: '/dashboard/reports', icon: FileBarChart },
   { name: 'History', href: '/dashboard/history', icon: History },
 ];
@@ -27,7 +27,7 @@ const pageNames: Record<string, string> = {
   '/dashboard/documents': 'Documents',
   '/dashboard/workspace': 'Research workspace',
   '/dashboard/knowledge-graph': 'Knowledge graph',
-  '/dashboard/verification': 'Verification',
+  '/dashboard/verification': 'Checks',
   '/dashboard/reports': 'Reports',
   '/dashboard/history': 'History',
   '/dashboard/settings': 'Settings',

@@ -12,6 +12,7 @@ import {
   type VerificationStatsResponse,
 } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
+import { SUPPORT_STYLES, supportLabel } from '@/lib/verification';
 import { cn } from '@/lib/utils';
 import {
   PageEmpty,
@@ -38,24 +39,17 @@ const PAGE_SIZE = 10;
 
 const FILTERS: Array<{ value: string; label: string }> = [
   { value: '', label: 'All answers' },
-  { value: 'VERIFIED', label: 'Verified' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'PARTIAL', label: 'Partial' },
-  { value: 'UNVERIFIED', label: 'Not verified' },
+  { value: 'ATTENTION', label: 'Needs attention' },
+  { value: 'COMPLETED', label: 'Checked' },
+  { value: 'PARTIAL', label: 'Partly checked' },
+  { value: 'UNVERIFIED', label: 'Not checked' },
 ];
 
-const SUPPORT_STYLES: Record<SupportClass, { label: string; className: string }> = {
-  SUPPORTED: { label: 'Supported', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  PARTIALLY_SUPPORTED: { label: 'Partially supported', className: 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
-  UNSUPPORTED: { label: 'Unsupported', className: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
-  CONFLICTING: { label: 'Conflicting', className: 'border-primary/25 bg-primary/10 text-primary' },
-};
-
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  NOT_REQUESTED: { label: 'Not verified', className: 'border-border/80 bg-muted/60 text-muted-foreground' },
-  PARTIAL: { label: 'Partial', className: 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
-  COMPLETED: { label: 'Verified', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
-  FAILED: { label: 'Failed', className: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
+  NOT_REQUESTED: { label: 'Not checked', className: 'border-border/80 bg-muted/60 text-muted-foreground' },
+  PARTIAL: { label: 'Partly checked', className: 'border-amber-400/25 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
+  COMPLETED: { label: 'Checked', className: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  FAILED: { label: 'Check did not run', className: 'border-rose-400/25 bg-rose-500/10 text-rose-700 dark:text-rose-300' },
 };
 
 export function VerificationPage() {
@@ -91,21 +85,21 @@ export function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['verifications'] });
       if (result.status === 'FAILED') {
         toast({
-          title: 'Verification failed',
-          description: result.error ?? 'The model could not classify this answer. Nothing was stored.',
+          title: 'Deep check did not run',
+          description: result.error ?? 'The model could not assess this answer. Nothing was stored.',
           variant: 'destructive',
         });
       } else {
-        const classified = result.claims.filter((claim) => claim.supportClass != null).length;
+        const assessed = result.claims.filter((claim) => claim.supportClass != null).length;
         toast({
-          title: result.status === 'PARTIAL' ? 'Verification partially completed' : 'Verification complete',
-          description: `${classified} of ${result.claims.length} analyzed claim(s) classified${
-            result.coverage != null ? ` · coverage ${Math.round(result.coverage * 100)}%` : ''
+          title: result.status === 'PARTIAL' ? 'Deep check partly completed' : 'Deep check finished',
+          description: `${assessed} of ${result.claims.length} analyzed claim(s) assessed${
+            result.coverage != null ? ` · ${Math.round(result.coverage * 100)}% cite a source` : ''
           }.`,
         });
       }
     },
-    onError: (error) => toast(errorToast(error, 'Verification failed')),
+    onError: (error) => toast(errorToast(error, 'Deep check failed')),
   });
 
   const stats = statsQuery.data;
@@ -120,12 +114,12 @@ export function VerificationPage() {
   return (
     <div className="space-y-6">
       <section className="page-hero">
-        <p className="eyebrow">Verification</p>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Check every claim against its evidence</h1>
+        <p className="eyebrow">Checks</p>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">See what each answer actually cites</h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
-          Each assistant answer is broken into claims and assessed against the passages it cites.
-          Support classes are AI grounding assessments, not calibrated probabilities — open the
-          conversation to read the source excerpts yourself.
+          Every answer gets a free citation check: how many of its claims point at a source. A deep
+          check adds the AI&apos;s assessment of whether the cited text backs each claim. Those
+          assessments are not probabilities — open the conversation to read the excerpts yourself.
         </p>
       </section>
 
@@ -147,7 +141,7 @@ export function VerificationPage() {
           )}
         >
           <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-          Answer verification
+          Answers
         </button>
         <button
           type="button"
@@ -162,7 +156,10 @@ export function VerificationPage() {
           )}
         >
           <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-          Contradictions
+          Conflicts
+          <span className="rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Beta
+          </span>
         </button>
       </div>
 
@@ -181,10 +178,10 @@ export function VerificationPage() {
       {stats && (
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatCard label="Answers" value={stats.total} hint="assistant responses" />
-          <StatCard label="Verified" value={stats.verified} hint="at least one stored claim" accent="text-emerald-700 dark:text-emerald-300" />
-          <StatCard label="Completed" value={stats.completed} hint="every analyzed claim classified" accent="text-primary" />
-          <StatCard label="Partial" value={stats.partial} hint="some claims unclassified" accent="text-amber-700 dark:text-amber-300" />
-          <StatCard label="Not verified" value={stats.unverified} hint="no stored verification" accent="text-muted-foreground" />
+          <StatCard label="Checked" value={stats.verified} hint="at least one stored check" accent="text-emerald-700 dark:text-emerald-300" />
+          <StatCard label="Deep check done" value={stats.completed} hint="every analyzed claim assessed" accent="text-primary" />
+          <StatCard label="Partly checked" value={stats.partial} hint="some claims unassessed" accent="text-amber-700 dark:text-amber-300" />
+          <StatCard label="Not checked" value={stats.unverified} hint="no stored check" accent="text-muted-foreground" />
         </section>
       )}
 
@@ -223,11 +220,11 @@ export function VerificationPage() {
           {items.length === 0 ? (
             <PageEmpty
               icon={ShieldQuestion}
-              title={filter ? 'No answers match this filter' : 'No answers to verify yet'}
+              title={filter ? 'No answers match this filter' : 'No answers checked yet'}
               description={
                 filter
-                  ? 'Try another status filter, or clear it to see every assistant answer.'
-                  : 'Ask a question in the research workspace. Answers there can be verified claim by claim, and the results appear here.'
+                  ? 'Try another filter, or clear it to see every assistant answer.'
+                  : 'Run a deep check from any answer in Ask. Every answer also gets a free citation check automatically, and the results appear here.'
               }
               action={
                 <Link
@@ -264,8 +261,8 @@ export function VerificationPage() {
       <p className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-[11px] leading-5 text-muted-foreground">
         <strong className="text-foreground/80">What the numbers mean:</strong> coverage is the
         deterministic fraction of analyzed claims that cite at least one valid source. Support
-        classes come from one bounded model call and describe grounding in the cited excerpts only.
-        A failed verification stores nothing and leaves the answer unverified.
+        badges come from one bounded model call and describe grounding in the cited excerpts only.
+        A failed check stores nothing and leaves the answer unchanged.
       </p>
         </>
       )}
@@ -334,7 +331,7 @@ function VerificationCard({
             ) : (
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
             )}
-            {verifying ? 'Verifying…' : hasStoredResult ? 'Re-run verification' : 'Verify claims'}
+            {verifying ? 'Checking…' : hasStoredResult ? 'Re-run deep check' : 'Deep check'}
           </button>
         </div>
       </div>
@@ -367,7 +364,7 @@ function VerificationCard({
         )}
         {item.verificationModel && <span>model {item.verificationModel}</span>}
         {item.verifiedAt && (
-          <span>verified {formatDistanceToNow(new Date(item.verifiedAt), { addSuffix: true })}</span>
+          <span>checked {formatDistanceToNow(new Date(item.verifiedAt), { addSuffix: true })}</span>
         )}
       </div>
 
@@ -385,7 +382,7 @@ function VerificationCard({
                 )}
               >
                 {supportClass === 'SUPPORTED' && <CheckCircle2 className="h-3 w-3" aria-hidden="true" />}
-                {style.label}
+                {supportLabel(supportClass)}
                 <span className="tabular-nums">{count}</span>
               </span>
             );

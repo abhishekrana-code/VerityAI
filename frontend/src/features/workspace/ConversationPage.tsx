@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Message, type MessageListResponse, type Conversation, type Document, type Citation, type ClaimVerificationResponse, type DocumentSummariesResponse } from '@/lib/api';
+import { SUPPORT_STYLES, isQuickCheck, supportLabel, trustLine } from '@/lib/verification';
 import { errorToast } from '@/lib/errors';
 import { ArrowLeft, ArrowUpRight, Send, Loader2, Copy, Check, AlertCircle, FileText, MoreVertical, Sparkles, Plus, X, ShieldCheck } from 'lucide-react';
 import { cn, pluralize } from '@/lib/utils';
@@ -12,6 +13,8 @@ import { Markdown } from '@/components/ui/Markdown';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
+
+const CITATION_EXPLAINER_KEY = 'verityai.citations-explained';
 
 const GENERIC_STARTERS = [
   'Summarize the main points',
@@ -41,6 +44,14 @@ export function ConversationPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [showCitationExplainer, setShowCitationExplainer] = useState(() => {
+    try {
+      return window.localStorage.getItem(CITATION_EXPLAINER_KEY) !== '1';
+    } catch {
+      return false;
+    }
+  });
+  const quickChecksStarted = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -100,6 +111,45 @@ export function ConversationPage() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const dismissCitationExplainer = () => {
+    setShowCitationExplainer(false);
+    try {
+      window.localStorage.setItem(CITATION_EXPLAINER_KEY, '1');
+    } catch {
+      // Private mode / storage disabled: the tip simply returns next visit.
+    }
+  };
+
+  /**
+   * Every completed answer gets its deterministic citation check automatically:
+   * no model call, no rate-limit cost, no click. A stored result (including a
+   * previous deep check) is reused, so reopening a conversation costs nothing.
+   */
+  useEffect(() => {
+    const messages = messagesData?.content ?? [];
+    if (!conversationId) return;
+    for (const message of messages) {
+      if (message.role !== 'ASSISTANT' || message.status !== 'COMPLETED') continue;
+      if (verifications[message.id] || quickChecksStarted.current.has(message.id)) continue;
+      quickChecksStarted.current.add(message.id);
+      void (async () => {
+        try {
+          let result = await api.get<ClaimVerificationResponse>(
+            `/conversations/${conversationId}/messages/${message.id}/verify`,
+          );
+          if (result.status === 'NOT_REQUESTED') {
+            result = await api.post<ClaimVerificationResponse>(
+              `/conversations/${conversationId}/messages/${message.id}/verify?mode=quick`,
+            );
+          }
+          setVerifications((current) => ({ ...current, [message.id]: result }));
+        } catch {
+          // Leave the trust line absent rather than inventing a result.
+        }
+      })();
+    }
+  }, [messagesData, conversationId, verifications]);
 
   // Document context (Feature 5): add/remove documents at any time via the
   // existing PATCH /conversations/{id} endpoint (ownership-checked server-side).
@@ -205,38 +255,23 @@ export function ConversationPage() {
     });
   };
 
-  /**
-   * Loads verification for a message; runs it (POST) only when none is stored
-   * yet, so a page refresh never re-pays for an already-verified answer.
-   */
-  const runVerification = async (messageId: string, force = false) => {
+  /** Deep check: one bounded model call that assesses grounding in the cited text. */
+  const runDeepCheck = async (messageId: string) => {
     setVerifyingId(messageId);
     try {
-      let result: ClaimVerificationResponse;
-      if (force) {
-        result = await api.post<ClaimVerificationResponse>(
-          `/conversations/${conversationId}/messages/${messageId}/verify`
-        );
-      } else {
-        result = await api.get<ClaimVerificationResponse>(
-          `/conversations/${conversationId}/messages/${messageId}/verify`
-        );
-        if (result.status === 'NOT_REQUESTED') {
-          result = await api.post<ClaimVerificationResponse>(
-            `/conversations/${conversationId}/messages/${messageId}/verify`
-          );
-        }
-      }
+      const result = await api.post<ClaimVerificationResponse>(
+        `/conversations/${conversationId}/messages/${messageId}/verify?mode=deep`,
+      );
       setVerifications((v) => ({ ...v, [messageId]: result }));
       if (result.status === 'FAILED') {
         toast({
-          title: 'Verification failed',
-          description: result.error ?? 'The model could not classify this answer.',
+          title: 'Deep check did not run',
+          description: result.error ?? 'The model could not assess this answer.',
           variant: 'destructive',
         });
       }
     } catch (err) {
-      toast(errorToast(err, 'Verification failed'));
+      toast(errorToast(err, 'Deep check failed'));
     } finally {
       setVerifyingId(null);
     }
@@ -298,6 +333,28 @@ export function ConversationPage() {
         </button>
       </div>
 
+      {/* Explain citations and the trust line once, then stay out of the way. */}
+      {showCitationExplainer && (messagesData?.content.length ?? 0) > 0 && (
+        <div
+          role="note"
+          className="mb-4 flex items-start gap-3 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-xs text-muted-foreground"
+        >
+          <span className="flex-1 leading-5">
+            Citations like <span className="rounded bg-primary/10 px-1 font-medium text-primary">[S1]</span>{' '}
+            open the exact passage they came from. The line under each answer counts how many of
+            its claims cite a source — it is a citation check, not a judgement that the answer is
+            correct.
+          </span>
+          <button
+            type="button"
+            onClick={dismissCitationExplainer}
+            className="shrink-0 rounded-md border border-border px-2 py-1 font-medium transition hover:bg-accent"
+          >
+            Got it
+          </button>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-6 pb-4" role="log" aria-live="polite">
         {msgsLoading ? (
@@ -342,8 +399,7 @@ export function ConversationPage() {
                 onOpenCitation={openCitation}
                 verification={verifications[msg.id]}
                 verifying={verifyingId === msg.id}
-                onVerify={() => runVerification(msg.id)}
-                onReverify={() => runVerification(msg.id, true)}
+                onDeepCheck={() => runDeepCheck(msg.id)}
               />
             ))}
             <div ref={messagesEndRef} />
@@ -499,8 +555,7 @@ function MessageBubble({
   onOpenCitation,
   verification,
   verifying,
-  onVerify,
-  onReverify,
+  onDeepCheck,
 }: {
   message: Message;
   onCopy: () => void;
@@ -509,8 +564,7 @@ function MessageBubble({
   onOpenCitation: (cite: Citation) => void;
   verification?: ClaimVerificationResponse;
   verifying: boolean;
-  onVerify: () => void;
-  onReverify: () => void;
+  onDeepCheck: () => void;
 }) {
   const isUser = message.role === 'USER';
 
@@ -580,31 +634,49 @@ function MessageBubble({
             </div>
           )}
 
-          {/* Claim verification (Feature 6) */}
-          {!isUser && message.status === 'COMPLETED' && !verification && (
-            <div className="mt-2">
+          {/* Trust line: only what the deterministic citation check actually found. */}
+          {!isUser && message.status === 'COMPLETED' && (
+            <div className="mt-2 space-y-1.5">
+              {verification ? (
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  <span>{trustLine(verification.claims)}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Checking citations…</p>
+              )}
+
+              {verification && isQuickCheck(verification) && (
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  Citation check only — no claim has been assessed for support yet.
+                </p>
+              )}
+
               <button
-                onClick={onVerify}
+                onClick={onDeepCheck}
                 disabled={verifying}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
               >
-                {verifying ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
-                {verifying ? 'Verifying claims…' : 'Verify claims'}
+                {verifying ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-3 w-3" />
+                )}
+                {verifying
+                  ? 'Running deep check…'
+                  : verification?.mode === 'DEEP'
+                    ? 'Re-run deep check'
+                    : 'Deep check'}
               </button>
             </div>
           )}
-          {!isUser && verifying && !verification && (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Checking claims against cited sources…
-            </div>
-          )}
-          {verification && (
+
+          {verification && !isQuickCheck(verification) && (
             <VerificationPanel
               verification={verification}
               citations={message.citations}
               onOpenCitation={onOpenCitation}
-              onReverify={onReverify}
+              onReverify={onDeepCheck}
               verifying={verifying}
             />
           )}
@@ -663,29 +735,7 @@ function renderWithCitations(content: string, citations: Citation[], onOpen: (ci
 // Verification panel
 // ---------------------------------------------------------------------------
 
-const SUPPORT_BADGES: Record<string, { label: string; className: string }> = {
-  SUPPORTED: {
-    label: 'Supported',
-    className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  },
-  PARTIALLY_SUPPORTED: {
-    label: 'Partially supported',
-    className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  },
-  UNSUPPORTED: {
-    label: 'Unsupported',
-    className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  },
-  CONFLICTING: {
-    label: 'Conflicting',
-    className: 'bg-primary text-primary dark:bg-primary/30 dark:text-primary',
-  },
-};
 
-const UNCLASSIFIED_BADGE = {
-  label: 'Not classified',
-  className: 'bg-muted text-muted-foreground',
-};
 
 function VerificationPanel({
   verification,
@@ -708,7 +758,7 @@ function VerificationPanel({
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 font-medium">
           <ShieldCheck className="h-4 w-4 text-primary" />
-          Claim verification
+          Deep check
         </span>
         <div className="flex items-center gap-3">
           <Link
@@ -756,7 +806,8 @@ function VerificationPanel({
 
       {verification.status === 'PARTIAL' && (
         <p className="rounded border border-amber-300/40 bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-          Some claims could not be classified — they appear without a badge. Re-run to retry.
+          Some claims were not assessed by the model — they appear without a badge. Re-run the deep
+          check to retry.
         </p>
       )}
       {verification.status === 'FAILED' && (
@@ -789,12 +840,18 @@ function VerificationPanel({
       {verification.claims.length > 0 && (
         <div className="max-h-72 space-y-2 overflow-y-auto">
           {verification.claims.map((claim) => {
-            const badge = claim.supportClass ? SUPPORT_BADGES[claim.supportClass] ?? UNCLASSIFIED_BADGE : UNCLASSIFIED_BADGE;
             return (
               <div key={claim.claimIndex} className="rounded border bg-muted/40 p-2">
                 <div className="flex items-start gap-2">
-                  <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', badge.className)}>
-                    {badge.label}
+                  <span
+                    className={cn(
+                      'shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium',
+                      claim.supportClass
+                        ? SUPPORT_STYLES[claim.supportClass]
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {supportLabel(claim.supportClass)}
                   </span>
                   <p className="flex-1 text-sm">{claim.claimText}</p>
                 </div>
@@ -832,8 +889,8 @@ function VerificationPanel({
       )}
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Support badges are AI assessments of grounding in the cited sources — not calibrated
-        probabilities. Coverage counts claims that cite at least one source.
+        Badges are AI assessments of grounding in the cited sources — not probabilities and not a
+        guarantee. The coverage bar counts claims that cite at least one source.
       </p>
     </div>
   );

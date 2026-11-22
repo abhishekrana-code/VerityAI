@@ -237,6 +237,8 @@ export interface InvalidReference {
 export interface ClaimVerificationResponse {
   messageId: string;
   status: VerificationStatus;
+  /** QUICK = deterministic citation checks only; DEEP = adds the model assessment. */
+  mode: 'QUICK' | 'DEEP' | null;
   /** Deterministic fraction of analyzed claims citing ≥1 valid source. */
   coverage: number | null;
   model: string | null;
