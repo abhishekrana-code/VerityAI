@@ -35,13 +35,12 @@ class SummaryServiceQueueTest {
     @Mock private DocumentChunkRepository chunkRepository;
     @Mock private DocumentSummaryRepository summaryRepository;
     @Mock private LlmService llmService;
-    @Mock private KnowledgeGraphService knowledgeGraphService;
 
     @Test
     void schedule_whenQueueIsFull_marksDocumentPendingForBackfill() throws Exception {
         SummaryService service = new SummaryService(
             documentRepository, chunkRepository, summaryRepository,
-            llmService, knowledgeGraphService, new ObjectMapper());
+            llmService, new ObjectMapper());
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "queueCapacity", 1);
         service.initQueue();

@@ -357,10 +357,10 @@ public class DocumentService {
             documentRepository.updateProcessingResult(
                 documentId, Document.DocumentStatus.READY, pageCount);
 
-            // Phase 3: deterministic knowledge-graph extraction. Runs after the
-            // document is READY (the builder only reads READY documents) and is
-            // best-effort: a graph failure is recorded on the document and never
-            // blocks indexing or retrieval.
+            // Phase 3: deterministic entity extraction. Runs as soon as the
+            // document is READY, before (and independently of) any AI summary,
+            // and is best-effort: a failure is recorded on the document and
+            // never blocks indexing or retrieval.
             knowledgeGraphService.rebuild(documentId);
 
             processingEventService.record(documentId, attempt, DocumentProcessingEvent.Stage.COMPLETED);
