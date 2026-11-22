@@ -88,7 +88,7 @@ class PasswordResetIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body(email, PASSWORD)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.authenticated").value(false));
+            .andExpect(jsonPath("$.authenticated").value(true));
     }
 
     private Cookie login(String email, String password) throws Exception {

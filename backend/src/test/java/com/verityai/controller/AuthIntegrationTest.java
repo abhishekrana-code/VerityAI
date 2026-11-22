@@ -68,16 +68,20 @@ class AuthIntegrationTest {
     }
 
     /**
-     * Registers a fresh user (no session is created) and then logs in,
-     * returning the session cookie established by the login response.
+     * Registers a fresh user, which signs them in, and returns the session
+     * cookie established by the registration response.
      */
     private Cookie register(String email) throws Exception {
-        mockMvc.perform(post("/api/v1/auth/register")
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody(email)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.authenticated").value(false));
-        return login(email);
+            .andExpect(jsonPath("$.authenticated").value(true))
+            .andExpect(jsonPath("$.user.email").value(email))
+            .andReturn();
+        Cookie session = result.getResponse().getCookie("SESSION");
+        assertThat(session).as("SESSION cookie after registration").isNotNull();
+        return session;
     }
 
     private Cookie login(String email) throws Exception {
@@ -130,16 +134,39 @@ class AuthIntegrationTest {
     }
 
     @Test
-    void registrationDoesNotCreateAnAuthenticatedSession() throws Exception {
+    void registrationSignsTheNewAccountIn() throws Exception {
+        String email = uniqueEmail();
         MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(registerBody(uniqueEmail())))
+                .content(registerBody(email)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.authenticated").value(false))
+            .andExpect(jsonPath("$.authenticated").value(true))
             .andReturn();
 
-        assertThat(result.getResponse().getCookie("SESSION"))
-            .as("registration must not establish a session")
+        Cookie session = result.getResponse().getCookie("SESSION");
+        assertThat(session).as("registration must establish a session").isNotNull();
+
+        mockMvc.perform(get("/api/v1/auth/me").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(true))
+            .andExpect(jsonPath("$.user.email").value(email));
+    }
+
+    @Test
+    void duplicateRegistrationNeverSignsAnyoneIn() throws Exception {
+        String email = uniqueEmail();
+        register(email);
+
+        MvcResult duplicate = mockMvc.perform(post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody(email)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.authenticated").value(false))
+            .andExpect(jsonPath("$.user").value(org.hamcrest.Matchers.nullValue()))
+            .andReturn();
+
+        assertThat(duplicate.getResponse().getCookie("SESSION"))
+            .as("a duplicate registration must not sign the caller in")
             .isNull();
     }
 

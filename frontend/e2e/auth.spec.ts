@@ -9,17 +9,14 @@ test.describe('authentication and sessions', () => {
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   });
 
-  test('registers, signs in, redirects public routes, and logs out', async ({ page }) => {
+  test('registers, lands signed in, redirects public routes, and logs out', async ({ page }) => {
     const user = uniqueUser();
     await registerUser(page, user);
-    await expect(
-      page.getByText('Account created. Sign in to start researching.'),
-    ).toBeVisible();
 
-    await login(page, user);
+    // A brand-new account has no activity yet, so the greeting is "Welcome".
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(
-      page.getByRole('heading', { name: `Welcome back, ${user.displayName}` }),
+      page.getByRole('heading', { name: `Welcome, ${user.displayName}` }),
     ).toBeVisible();
 
     // An authenticated user must not see the login form again.
@@ -42,7 +39,6 @@ test.describe('authentication and sessions', () => {
 
     try {
       await registerUser(pageA, user);
-      await login(pageA, user);
       await expect(pageA).toHaveURL(/\/dashboard$/);
 
       await login(pageB, user);
@@ -72,6 +68,6 @@ test.describe('authentication and sessions', () => {
 
     // The session principal must reflect the new name after a full reload.
     await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { name: 'Welcome back, Renamed E2E' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome, Renamed E2E' })).toBeVisible();
   });
 });

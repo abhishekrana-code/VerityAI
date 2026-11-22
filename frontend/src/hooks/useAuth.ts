@@ -27,11 +27,18 @@ export function useCsrfToken() {
 }
 
 export function useRegister() {
+  const queryClient = useQueryClient();
   return useMutation<AuthResponse, ApiException, RegisterRequest>({
     mutationFn: (data: RegisterRequest) => api.post<AuthResponse>('/auth/register', data),
-    // Registration deliberately does not create a session: the response is
-    // always generic (`authenticated: false`), so there is no auth state to
-    // cache. The user signs in explicitly afterwards.
+    onSuccess: (response) => {
+      // Registration signs the new account in, so the dashboard can open
+      // immediately. A duplicate email stays generic (`authenticated: false`)
+      // and falls back to the sign-in screen.
+      if (response.authenticated) {
+        queryClient.setQueryData(['auth', 'me'], response);
+        queryClient.invalidateQueries({ queryKey: ['auth'] });
+      }
+    },
   });
 }
 

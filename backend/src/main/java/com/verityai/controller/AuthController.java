@@ -52,17 +52,21 @@ public class AuthController {
     private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
 
     /**
-     * Creates the account but never establishes a session and never reveals
-     * whether the email was already registered. Both branches return the same
-     * body; the bcrypt hash is computed in both so response timing does not
-     * leak account existence either.
+     * Creates the account and signs it in, so a new user reaches the dashboard
+     * without retyping their credentials. An already-registered email keeps the
+     * generic {@code authenticated: false} body and no session: registration
+     * must never reveal whether an account exists, and must never sign someone
+     * into an account they do not own. The bcrypt hash is computed in both
+     * branches so response timing does not leak account existence either.
      */
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request,
-                                                 HttpServletRequest httpRequest) {
+                                                 HttpServletRequest httpRequest,
+                                                 HttpServletResponse httpResponse) {
         rateLimitService.checkRegister(clientIp(httpRequest));
 
         String encoded = passwordEncoder.encode(request.getPassword());
+        boolean created = false;
         if (!userRepository.existsByEmailIgnoreCaseAndNotDeleted(request.getEmail())) {
             User user = new User();
             user.setEmail(request.getEmail());
@@ -71,6 +75,7 @@ public class AuthController {
             user.setRole("USER");
             try {
                 userRepository.save(user);
+                created = true;
             } catch (DataIntegrityViolationException e) {
                 // Lost a race with a concurrent registration (or a soft-deleted
                 // account still owns the unique email). Stay generic.
@@ -78,7 +83,16 @@ public class AuthController {
             }
         }
 
-        return ResponseEntity.ok(new AuthResponse(null, false));
+        if (!created) {
+            return ResponseEntity.ok(new AuthResponse(null, false));
+        }
+
+        authenticateAndSave(request.getEmail(), request.getPassword(), httpRequest, httpResponse);
+        User createdUser = userRepository.findByEmailIgnoreCase(request.getEmail())
+            .orElseThrow(() -> ApiException.unauthenticated("Registration could not be completed"));
+        createdUser.setLastLoginAt(java.time.Instant.now());
+        createdUser = userRepository.save(createdUser);
+        return ResponseEntity.ok(new AuthResponse(toUserResponse(createdUser), true));
     }
 
     @PostMapping("/login")

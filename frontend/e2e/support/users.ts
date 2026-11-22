@@ -28,7 +28,8 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
   await page.locator('#password').fill(user.password);
   await page.locator('#confirmPassword').fill(user.password);
   await page.getByRole('button', { name: 'Create Account' }).click();
-  await expect(page).toHaveURL(/\/login\?registered=1$/);
+  // Registration signs the new account in and opens the dashboard directly.
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 /** Fills and submits the login form. Callers assert the resulting URL/state. */
@@ -39,8 +40,8 @@ export async function login(page: Page, user: TestUser): Promise<void> {
   await page.getByRole('button', { name: 'Sign In' }).click();
 }
 
+/** Kept as a named step: registering is now signing in. */
 export async function registerAndLogin(page: Page, user: TestUser): Promise<void> {
   await registerUser(page, user);
-  await login(page, user);
   await expect(page).toHaveURL(/\/dashboard$/);
 }

@@ -38,9 +38,11 @@ export function RegisterPage() {
     register(
       { email: data.email, password: data.password, displayName: data.displayName },
       {
-        // Registration is intentionally session-free: the account is created
-        // but the user must sign in explicitly.
-        onSuccess: () => navigate('/login?registered=1'),
+        // The account is signed in as part of registration, so a new user
+        // lands on Home instead of typing their credentials again. The generic
+        // duplicate-email response still routes to the sign-in screen.
+        onSuccess: (response) =>
+          navigate(response.authenticated ? '/dashboard' : '/login', { replace: true }),
       }
     );
   };
