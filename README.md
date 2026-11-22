@@ -29,13 +29,21 @@ React SPA — runs from one compose file:
 git clone <your-repo-url> VerityAI
 cd VerityAI
 cp .env.example .env          # Windows PowerShell: copy .env.example .env
-# edit .env: at minimum set GROQ_API_KEY
+# edit .env: at minimum set LLM_API_KEY (the default endpoint is Groq)
 docker compose up -d --build
 ```
 
 Open **http://localhost:8080**, register an account, upload a PDF and wait for
 `READY`. The first build takes a few minutes (Maven/npm fetch inside the
 images); later starts take seconds.
+
+The app has four places: **Home** (upload, recent documents), **Library** (all
+documents, with tabs for a document's summary, entities and processing),
+**Ask** (cited answers over your PDFs) and **Checks** (claim verification).
+Summaries are generated when you open a document's Summary tab, not during
+upload — uploading a PDF makes no model calls. Reports and the knowledge-graph
+canvas are gone: a summary exports as Markdown, and related documents live in
+the Entities tab.
 
 ### Ports
 
@@ -119,7 +127,7 @@ listening on 8080/5173 (stop the compose stack first if it is).
 git clone <your-repo-url> VerityAI
 cd VerityAI
 copy .env.example .env
-# Edit .env and set GROQ_API_KEY at minimum
+# Edit .env and set LLM_API_KEY at minimum (Groq is the default endpoint)
 ```
 
 ### 2. Start Database
