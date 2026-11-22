@@ -181,7 +181,7 @@ export function Layout() {
           <div className="mx-auto w-full max-w-[1440px]"><Outlet /></div>
         </main>
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-5 py-3 text-[10px] text-muted-foreground sm:px-8">
-          <span>© {new Date().getFullYear()} VerityAI · Answers you can verify.</span>
+          <span>© {new Date().getFullYear()} VerityAI · Cited answers from your PDFs.</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Research workspace ready</span>
         </footer>
       </div>

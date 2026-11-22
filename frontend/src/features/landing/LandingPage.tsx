@@ -84,7 +84,7 @@ export function LandingPage() {
           <div className="mx-auto max-w-4xl text-center">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-medium text-primary">
               <Sparkles className="h-4 w-4" />
-              <span>Answers you can verify</span>
+              <span>Answers with page-level citations</span>
             </div>
             <h1 className="mb-7 text-4xl font-semibold leading-[1.06] tracking-[-0.04em] text-foreground sm:text-5xl lg:text-[4.25rem]">
               AI Research Assistant with{' '}
@@ -262,7 +262,7 @@ export function LandingPage() {
               <Logo to="/" />
               <p className="mt-4 text-sm text-muted-foreground max-w-xs">
                 VerityAI — Evidence-based AI research assistant.
-                Answers you can verify.
+                Answers with page-level citations.
               </p>
             </div>
             <nav>
