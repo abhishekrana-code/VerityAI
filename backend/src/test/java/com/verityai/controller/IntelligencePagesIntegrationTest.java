@@ -223,18 +223,6 @@ class IntelligencePagesIntegrationTest {
         verificationRepository.save(row);
     }
 
-    private void event(Document document, int attempt, DocumentProcessingEvent.Stage stage,
-                       Instant createdAt, String errorCode, String errorMessage) {
-        DocumentProcessingEvent event = new DocumentProcessingEvent();
-        event.setDocument(document);
-        event.setAttempt(attempt);
-        event.setStage(stage);
-        event.setCreatedAt(createdAt);
-        event.setErrorCode(errorCode);
-        event.setErrorMessage(errorMessage);
-        eventRepository.save(event);
-    }
-
     // ------------------------------------------------------------------
     // Entity index and document connections
     // ------------------------------------------------------------------
@@ -443,55 +431,15 @@ class IntelligencePagesIntegrationTest {
     }
 
     // ------------------------------------------------------------------
-    // History feed
-    // ------------------------------------------------------------------
-
-    @Test
-    void historyListsProcessingEventsNewestFirst() throws Exception {
-        String email = uniqueEmail();
-        Cookie session = register(email);
-        Document document = document(user(email), "history-report.pdf");
-
-        Instant now = Instant.now();
-        event(document, 1, DocumentProcessingEvent.Stage.QUEUED, now.minus(3, ChronoUnit.MINUTES), null, null);
-        event(document, 1, DocumentProcessingEvent.Stage.FAILED, now.minus(2, ChronoUnit.MINUTES),
-            "EXTRACTION_FAILED", "The PDF could not be read.");
-        event(document, 2, DocumentProcessingEvent.Stage.COMPLETED, now.minus(1, ChronoUnit.MINUTES), null, null);
-
-        MvcResult result = mockMvc.perform(get("/api/v1/history/processing")
-                .cookie(session)
-                .param("size", "10"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalElements").value(3))
-            .andReturn();
-        JsonNode history = objectMapper.readTree(result.getResponse().getContentAsString());
-
-        assertThat(history.get("content").size()).isEqualTo(3);
-        assertThat(history.at("/content/0/stage").asText()).isEqualTo("COMPLETED");
-        assertThat(history.at("/content/0/attempt").asInt()).isEqualTo(2);
-        assertThat(history.at("/content/1/stage").asText()).isEqualTo("FAILED");
-        assertThat(history.at("/content/1/errorCode").asText()).isEqualTo("EXTRACTION_FAILED");
-        assertThat(history.at("/content/1/errorMessage").asText()).contains("could not be read");
-        assertThat(history.at("/content/0/documentName").asText()).isEqualTo("history-report.pdf");
-
-        String intruderEmail = uniqueEmail();
-        Cookie intruderSession = register(intruderEmail);
-        mockMvc.perform(get("/api/v1/history/processing").cookie(intruderSession))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.totalElements").value(0));
-    }
-
-    // ------------------------------------------------------------------
     // Authentication
     // ------------------------------------------------------------------
 
     @Test
     void intelligenceReadModelsRequireAuthentication() throws Exception {
-        mockMvc.perform(get("/api/v1/knowledge-graph")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/knowledge-graph/entities")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/knowledge-graph/connections")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/verifications")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/verifications/stats")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/v1/reports")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/v1/history/processing")).andExpect(status().isUnauthorized());
     }
 
     // ------------------------------------------------------------------

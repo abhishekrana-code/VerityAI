@@ -172,8 +172,8 @@ verity-ai/
 - **Hybrid semantic search** (Phase 2) — Local ONNX embeddings + PostgreSQL pgvector fused with full-text search (RRF); degrades honestly to keyword-only when the model is unavailable
 - **Multi-document research chat** (Phase 2) — Ask across several PDFs at once; sources are compared explicitly and cited per claim; context documents can be added/removed at any time
 - **Claim verification** (Phase 2) — Deterministic citation coverage + AI grounding classes (Supported / Partially supported / Unsupported / Conflicting) with clickable page-level citation jumps into the PDF
-- **Knowledge graph** (Phase 3) — PostgreSQL-only, deterministic entity extraction with evidence excerpts and same-passage (`CO_OCCURS`) links rendered as an interactive SVG graph
-- **Verification, Reports & History pages** (Phase 3) — Library-wide read models over stored claim results, generated summaries (facts vs interpretations) and persisted processing events
+- **Entities and related documents** (Phase 3) — Deterministic entity extraction with evidence excerpts on each document page, plus IDF-style document connections from shared entities (years and two-letter codes ignored)
+- **Checks page** (Phase 3) — Answers with their stored claim results and a **Needs attention** filter, plus a **Conflicts** tab (Beta). Summaries export as Markdown from the document page
 - **Contradiction detection** (Phase 3, Feature 8) — Compares bounded claim pairs that share a subject and reports only genuine conflicts in five classes (numeric, temporal, attribute, causal, polarity), each with both claims, documents and page citations plus a LOW/MEDIUM/HIGH impact rating
 - **Dedicated search page** — Hybrid retrieval UI with document scope, honest strategy/model badges and PDF page jumps
 - **Themed UI** — Premium dark visual system by default, with a saved light/system option; theming only touches the shared shell, auth screens, dashboard and conversation styling, not routes, the API client or data flows
@@ -209,9 +209,7 @@ Everything else has working defaults. Phase 2 additions (all optional):
 - `VERIFY_ENABLED`, `VERIFY_MODEL`, `VERIFY_MAX_CLAIMS`, `VERIFY_MAX_TOKENS` — claim verification
 
 Phase 3 additions (all optional):
-- `KNOWLEDGE_GRAPH_ENABLED`, `KNOWLEDGE_GRAPH_BACKFILL_LIMIT`,
-  `KNOWLEDGE_GRAPH_REBUILD_MAX_DOCUMENTS`, `KNOWLEDGE_GRAPH_MAX_NODES`,
-  `KNOWLEDGE_GRAPH_MAX_EDGES` — deterministic PostgreSQL knowledge graph
+- `KNOWLEDGE_GRAPH_ENABLED`, `KNOWLEDGE_GRAPH_BACKFILL_LIMIT` — deterministic entity extraction
 - `CONTRADICTION_ENABLED`, `CONTRADICTION_MODEL`, `CONTRADICTION_MAX_DOCUMENTS`,
   `CONTRADICTION_MAX_CHUNKS_PER_DOCUMENT`, `CONTRADICTION_MAX_CLAIMS_PER_DOCUMENT`,
   `CONTRADICTION_MAX_PAIRS`, `CONTRADICTION_MAX_TOKENS` — contradiction detection
@@ -276,13 +274,11 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 | GET/POST | `/conversations/{id}/messages` | Read history / ask a question (RAG + citations) |
 | GET/POST | `/conversations/{id}/messages/{messageId}/verify` | Read stored claim verification / run it (bounded model call) |
 | POST | `/search` | Hybrid semantic + keyword search over your documents |
-| GET | `/knowledge-graph` | Evidence-backed entity graph (library or one document), filters `type`, `q`, `limit` |
-| POST | `/knowledge-graph/rebuild` | Rebuild one, several, or (bounded) all READY graphs |
+| GET | `/knowledge-graph/entities` | Merged entity index (library or one document), filters `type`, `q`, `limit` |
+| GET | `/knowledge-graph/connections` | Document pairs that share entities |
 | GET | `/verifications`, `/verifications/stats` | Stored claim-verification index and totals |
 | GET | `/contradictions`, `/contradictions/stats` | Stored contradiction findings, class/severity totals |
 | POST | `/contradictions/detect` | Run one bounded contradiction scan (bounded model call) |
-| GET | `/reports` | Report index over persisted summary sections |
-| GET | `/history/processing` | Persisted processing-event feed across your documents |
 | GET/POST/PATCH/DELETE | `/tags`, `/tags/{id}` | Tag management |
 | GET/POST/PATCH/DELETE | `/collections`… | Collection management (see [docs/api.md](docs/api.md)) |
 | GET | `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness` | Probes (unauthenticated) |

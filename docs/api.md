@@ -364,29 +364,6 @@ Semantics:
 
 ---
 
-## History — `/history` (Phase 3)
-
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/history/processing` | Paginated processing-event feed across the user's documents (`page`, `size`), newest first |
-
-Every row is a persisted `document_processing_events` stage transition — nothing
-is synthesized. Research-session history is served by the existing
-`GET /conversations`, which already returns newest-updated first.
-
-```jsonc
-{
-  "content": [{
-    "id": "…", "documentId": "…", "documentName": "report.pdf",
-    "attempt": 2, "stage": "COMPLETED",
-    "errorCode": null, "errorMessage": null, "createdAt": "…"
-  }],
-  "page": 0, "size": 25, "totalElements": 12, "totalPages": 1, "first": true, "last": true
-}
-```
-
----
-
 ## Tags — `/tags`
 
 | Method | Path | Notes |
