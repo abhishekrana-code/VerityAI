@@ -14,6 +14,7 @@ import com.verityai.repository.ContradictionRepository;
 import com.verityai.repository.DocumentChunkRepository;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.UserRepository;
+import com.verityai.service.ai.LlmErrors;
 import com.verityai.service.ai.LlmService;
 import com.verityai.service.verification.ClaimVerificationService;
 import lombok.RequiredArgsConstructor;
@@ -185,7 +186,7 @@ public class ContradictionService {
         } catch (Exception e) {
             log.warn("Contradiction detection model call failed: {}", e.getMessage());
             response.setStatus("FAILED");
-            response.setError("Model call failed: " + truncate(e.getMessage(), 200));
+            response.setError(LlmErrors.friendlyMessage(e));
             return response;
         }
 

@@ -10,6 +10,7 @@ import com.verityai.entity.DocumentSummary;
 import com.verityai.repository.DocumentChunkRepository;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.repository.DocumentSummaryRepository;
+import com.verityai.service.ai.LlmErrors;
 import com.verityai.service.ai.LlmService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -128,7 +129,7 @@ public class SummaryService {
     @Value("${verityai.summary.backfill-limit:20}")
     private int backfillLimit;
 
-    @Value("${verityai.groq.model:openai/gpt-oss-20b}")
+    @Value("${verityai.llm.model:openai/gpt-oss-20b}")
     private String model;
 
     @PreDestroy
@@ -163,7 +164,7 @@ public class SummaryService {
                 generate(documentId);
             } catch (Exception e) {
                 log.error("Summary generation failed for document {}", documentId, e);
-                markFailed(documentId, "Summary generation failed: " + safeMessage(e));
+                                    markFailed(documentId, LlmErrors.friendlyMessage(e));
             }
         }, documentId);
         if (!accepted) {
@@ -303,7 +304,7 @@ public class SummaryService {
                 documentId, text.length());
         } catch (Exception e) {
             log.error("Summary generation failed for document {}", documentId, e);
-            markFailed(documentId, "Summary generation failed: " + safeMessage(e));
+                                markFailed(documentId, LlmErrors.friendlyMessage(e));
         }
     }
 

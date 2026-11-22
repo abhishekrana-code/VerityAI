@@ -162,7 +162,7 @@ class ClaimVerificationQuickModeTest {
 
         assertThat(response.getMode()).isEqualTo(Mode.DEEP);
         assertThat(response.getStatus()).isEqualTo(Status.FAILED);
-        assertThat(response.getError()).contains("Model call failed");
+        assertThat(response.getError()).isEqualTo(com.verityai.service.ai.LlmErrors.UNAVAILABLE);
         verify(llmService).complete(any());
         verify(claimRepository, never()).saveAll(anyList());
     }

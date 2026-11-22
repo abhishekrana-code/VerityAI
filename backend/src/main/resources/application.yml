@@ -113,14 +113,17 @@ verityai:
     base-url: ${APP_BASE_URL:}
   password-reset:
     token-ttl-minutes: ${PASSWORD_RESET_TOKEN_TTL_MINUTES:30}
-  groq:
-    api-key: ${GROQ_API_KEY:}
-    model: ${GROQ_MODEL:openai/gpt-oss-20b}
-    api-url: ${GROQ_API_URL:https://api.groq.com/openai/v1/chat/completions}
-    connect-timeout-ms: ${GROQ_CONNECT_TIMEOUT_MS:10000}
-    read-timeout-ms: ${GROQ_READ_TIMEOUT_MS:60000}
-    max-retries: ${GROQ_MAX_RETRIES:2}
-    max-tokens: ${GROQ_MAX_TOKENS:4096}
+  # Any OpenAI-compatible /chat/completions endpoint. LLM_* is the
+  # provider-neutral name; the older GROQ_* variables keep working as fallbacks
+  # so existing deployments and .env files need no change.
+  llm:
+    api-key: ${LLM_API_KEY:${GROQ_API_KEY:}}
+    model: ${LLM_MODEL:${GROQ_MODEL:openai/gpt-oss-20b}}
+    api-url: ${LLM_API_URL:${GROQ_API_URL:https://api.groq.com/openai/v1/chat/completions}}
+    connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:${GROQ_CONNECT_TIMEOUT_MS:10000}}
+    read-timeout-ms: ${LLM_READ_TIMEOUT_MS:${GROQ_READ_TIMEOUT_MS:60000}}
+    max-retries: ${LLM_MAX_RETRIES:${GROQ_MAX_RETRIES:2}}
+    max-tokens: ${LLM_MAX_TOKENS:${GROQ_MAX_TOKENS:4096}}
   upload:
     dir: ${UPLOAD_DIR:uploads}
     max-file-size-mb: ${MAX_FILE_SIZE_MB:25}

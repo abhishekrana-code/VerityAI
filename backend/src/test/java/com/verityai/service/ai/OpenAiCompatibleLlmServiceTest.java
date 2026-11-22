@@ -17,13 +17,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * emits CJK/fullwidth brackets instead of ASCII ones; extraction must
  * normalize them so citations are never silently dropped.
  */
-class GroqLlmServiceTest {
+class OpenAiCompatibleLlmServiceTest {
 
-    private GroqLlmService service;
+    private OpenAiCompatibleLlmService service;
 
     @BeforeEach
     void setUp() {
-        service = new GroqLlmService(new ObjectMapper());
+        service = new OpenAiCompatibleLlmService(new ObjectMapper());
     }
 
     @Test

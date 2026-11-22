@@ -1,5 +1,7 @@
 package com.verityai.controller;
 
+import com.verityai.service.ai.LlmErrors;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -361,7 +363,7 @@ class ConversationRagIntegrationTest {
         assertThat(messages.get(0).getRole()).isEqualTo(Message.MessageRole.USER);
         assertThat(messages.get(1).getRole()).isEqualTo(Message.MessageRole.ASSISTANT);
         assertThat(messages.get(1).getStatus()).isEqualTo(Message.MessageStatus.FAILED);
-        assertThat(messages.get(1).getContent()).startsWith("Error generating answer");
+        assertThat(messages.get(1).getContent()).isEqualTo(LlmErrors.UNAVAILABLE);
     }
 
     // ==================================================================
@@ -527,7 +529,7 @@ class ConversationRagIntegrationTest {
                 .header("X-XSRF-TOKEN", csrf.token()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("FAILED"))
-            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("simulated outage")));
+            .andExpect(jsonPath("$.error").value(LlmErrors.UNAVAILABLE));
 
         // Nothing stored → the message stays NOT_REQUESTED for a clean retry
         mockMvc.perform(get(verifyPath(conv, message)).cookie(session))

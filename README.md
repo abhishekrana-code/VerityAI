@@ -52,7 +52,8 @@ images); later starts take seconds.
 
 | Key | Default | Effect |
 |---|---|---|
-| `GROQ_API_KEY` | placeholder | Chat, summaries, verification. Uploads still index without it |
+| `LLM_API_KEY` (or `GROQ_API_KEY`) | placeholder | Chat, summaries, verification. Uploads still index without it |
+| `LLM_MODEL`, `LLM_API_URL` | Groq defaults | Any OpenAI-compatible `/chat/completions` endpoint |
 | `POSTGRES_PASSWORD` | `verityai_dev` | Shared by the Postgres container and the backend |
 | `EMBEDDINGS_PROVIDER` | `onnx` | `onnx` = local semantic search (one-time model download into a volume); `off` = keyword-only |
 | `SERVER_SERVLET_SESSION_COOKIE_SECURE` | `false` | Set `true` once served over HTTPS |
@@ -201,7 +202,10 @@ verity-ai/
 ## Environment Variables
 
 See `.env.example` for all options. Minimum required:
-- `GROQ_API_KEY` — from https://console.groq.com/keys (chat fails without it)
+- `LLM_API_KEY` — any OpenAI-compatible provider; the default endpoint is Groq
+  (https://console.groq.com/keys). Chat fails without it. The older
+  `GROQ_API_KEY` / `GROQ_MODEL` / `GROQ_API_URL` variables still work as
+  fallbacks, so existing `.env` files need no change.
 
 Everything else has working defaults. Phase 2 additions (all optional):
 - `EMBEDDINGS_PROVIDER=onnx|off` — local embeddings; `off` = keyword-only search

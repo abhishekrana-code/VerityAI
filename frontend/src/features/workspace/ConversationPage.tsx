@@ -92,18 +92,18 @@ export function ConversationPage() {
       }));
       return { previousMessages };
     },
-    onError: (err, _newQuestion, context) => {
+    onError: (err, newQuestion, context) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(['messages', conversationId], context.previousMessages);
       }
+      // Keep the question in the composer so pressing Enter retries it.
+      setQuestion(newQuestion);
       toast(errorToast(err, 'Failed to send'));
     },
     onSuccess: () => {
+      setQuestion('');
       queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
-    },
-    onSettled: () => {
-      setQuestion('');
       textareaRef.current?.focus();
     },
   });

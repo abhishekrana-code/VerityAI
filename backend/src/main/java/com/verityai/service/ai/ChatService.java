@@ -38,10 +38,10 @@ public class ChatService {
     private final MessageCitationRepository citationRepository;
     private final ConversationRepository conversationRepository;
 
-    @Value("${verityai.groq.model:openai/gpt-oss-20b}")
+    @Value("${verityai.llm.model:openai/gpt-oss-20b}")
     private String model;
 
-    @Value("${verityai.groq.max-tokens:4096}")
+    @Value("${verityai.llm.max-tokens:4096}")
     private int maxTokens;
 
     /**
@@ -107,14 +107,15 @@ public class ChatService {
             llmResponse = llmService.generate(chatRequest);
         } catch (Exception e) {
             log.error("LLM generation failed", e);
+            String failureText = LlmErrors.friendlyMessage(e);
             Message errorMessage = new Message();
             errorMessage.setConversation(conversation);
             errorMessage.setRole(Message.MessageRole.ASSISTANT);
-            errorMessage.setContent("Error generating answer: " + e.getMessage());
+            errorMessage.setContent(failureText);
             errorMessage.setStatus(Message.MessageStatus.FAILED);
             errorMessage.setModel(model);
             messageRepository.save(errorMessage);
-            throw new LlmGenerationException("Failed to generate answer");
+            throw new LlmGenerationException(failureText);
         }
 
         // Determine evidence status

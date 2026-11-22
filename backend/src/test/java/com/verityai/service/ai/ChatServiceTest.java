@@ -239,7 +239,7 @@ class ChatServiceTest {
         Message failed = saved.getAllValues().get(1);
         assertThat(failed.getRole()).isEqualTo(Message.MessageRole.ASSISTANT);
         assertThat(failed.getStatus()).isEqualTo(Message.MessageStatus.FAILED);
-        assertThat(failed.getContent()).startsWith("Error generating answer");
+        assertThat(failed.getContent()).isEqualTo(LlmErrors.UNAVAILABLE);
         verify(conversationRepository, never()).touch(any(), any());
     }
 }

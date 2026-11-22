@@ -1,5 +1,7 @@
 package com.verityai.controller;
 
+import com.verityai.service.ai.LlmErrors;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.verityai.entity.Document;
@@ -269,7 +271,9 @@ class ContradictionIntegrationTest {
         JsonNode failed = objectMapper.readTree(detect(session, csrf, body).getResponse().getContentAsString());
         assertThat(failed.get("status").asText()).isEqualTo("FAILED");
         assertThat(failed.get("stored").asInt()).isZero();
-        assertThat(failed.get("error").asText()).contains("Model call failed");
+        // Provider internals stay in the log; the response carries the one
+        // actionable message.
+        assertThat(failed.get("error").asText()).isEqualTo(LlmErrors.UNAVAILABLE);
 
         mockMvc.perform(get("/api/v1/contradictions").cookie(session))
             .andExpect(status().isOk())

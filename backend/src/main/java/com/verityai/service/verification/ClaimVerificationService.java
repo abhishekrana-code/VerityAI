@@ -15,6 +15,7 @@ import com.verityai.exception.ApiException;
 import com.verityai.repository.MessageCitationRepository;
 import com.verityai.repository.MessageClaimVerificationRepository;
 import com.verityai.repository.MessageRepository;
+import com.verityai.service.ai.LlmErrors;
 import com.verityai.service.ai.LlmService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -211,7 +212,7 @@ public class ClaimVerificationService {
                     applyModelClassifications(pending, completion.content());
                 } catch (Exception e) {
                     log.warn("Claim verification model call failed: {}", e.getMessage());
-                    error = "Model call failed: " + truncate(e.getMessage(), 200);
+                    error = LlmErrors.friendlyMessage(e);
                 }
             }
         }
