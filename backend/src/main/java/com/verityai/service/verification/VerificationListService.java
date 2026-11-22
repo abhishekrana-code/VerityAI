@@ -188,6 +188,7 @@ public class VerificationListService {
             predicates.add(cb.equal(root.get("role"), Message.MessageRole.ASSISTANT));
 
             switch (normalized) {
+                case "ATTENTION" -> predicates.add(hasAttentionRow(root, query, cb));
                 case "VERIFIED" -> predicates.add(hasRows(root, query, cb, false));
                 case "UNVERIFIED" -> predicates.add(cb.not(hasRows(root, query, cb, false)));
                 case "PARTIAL" -> predicates.add(hasRows(root, query, cb, true));
@@ -201,6 +202,22 @@ public class VerificationListService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Answers that need a human look: at least one claim that was not found in
+     * the document or that contradicts it. Uncited claims are recorded as
+     * UNSUPPORTED by the deterministic layer, so this covers them too.
+     */
+    private static Predicate hasAttentionRow(Root<Message> root, CriteriaQuery<?> query,
+                                             CriteriaBuilder cb) {
+        Subquery<MessageClaimVerification> subquery = query.subquery(MessageClaimVerification.class);
+        Root<MessageClaimVerification> row = subquery.from(MessageClaimVerification.class);
+        subquery.select(row);
+        subquery.where(cb.and(
+            cb.equal(row.get("message").get("id"), root.get("id")),
+            row.get("supportClass").in(SupportClass.UNSUPPORTED, SupportClass.CONFLICTING)));
+        return cb.exists(subquery);
     }
 
     private static Predicate hasRows(Root<Message> root, CriteriaQuery<?> query,
@@ -222,7 +239,7 @@ public class VerificationListService {
         }
         String normalized = status.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
-            case "ALL", "VERIFIED", "UNVERIFIED", "PARTIAL", "COMPLETED" -> normalized;
+            case "ALL", "VERIFIED", "UNVERIFIED", "PARTIAL", "COMPLETED", "ATTENTION" -> normalized;
             default -> throw ApiException.validation("Invalid verification status: " + status);
         };
     }

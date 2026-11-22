@@ -209,16 +209,34 @@ public class ConversationController {
         return ResponseEntity.ok(claimVerificationService.getVerification(id, messageId));
     }
 
-    /** Runs claim verification (bounded model call, rate-limited) and stores the result. */
+    /**
+     * Runs a check and stores the result.
+     *
+     * <p>{@code mode=quick} is deterministic and free (citation coverage only);
+     * {@code mode=deep} (the default, for existing callers) adds one bounded,
+     * rate-limited model call. Only deep checks consume the AI rate limit.</p>
+     */
     @PostMapping("/{id}/messages/{messageId}/verify")
     public ResponseEntity<ClaimVerificationResponse> verify(
             @CurrentUser User user,
             @PathVariable UUID id,
-            @PathVariable UUID messageId) {
-        rateLimitService.checkAiRequest(user.getId());
+            @PathVariable UUID messageId,
+            @RequestParam(defaultValue = "deep") String mode) {
+        com.verityai.dto.response.ClaimVerificationResponse.Mode verificationMode = parseMode(mode);
+        if (verificationMode == com.verityai.dto.response.ClaimVerificationResponse.Mode.DEEP) {
+            rateLimitService.checkAiRequest(user.getId());
+        }
         conversationRepository.findByIdAndUserIdAndArchivedAtIsNull(id, user.getId())
             .orElseThrow(() -> ApiException.notFound("Conversation not found"));
-        return ResponseEntity.ok(claimVerificationService.verify(id, messageId));
+        return ResponseEntity.ok(claimVerificationService.verify(id, messageId, verificationMode));
+    }
+
+    private static com.verityai.dto.response.ClaimVerificationResponse.Mode parseMode(String mode) {
+        return switch (mode.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "quick" -> com.verityai.dto.response.ClaimVerificationResponse.Mode.QUICK;
+            case "deep" -> com.verityai.dto.response.ClaimVerificationResponse.Mode.DEEP;
+            default -> throw ApiException.validation("mode must be quick or deep");
+        };
     }
 
     private ConversationResponse toResponse(Conversation conversation) {

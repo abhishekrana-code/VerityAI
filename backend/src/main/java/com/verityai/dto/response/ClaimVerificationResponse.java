@@ -17,7 +17,7 @@ import java.util.UUID;
 public class ClaimVerificationResponse {
 
     public enum Status {
-        /** Never verified (no stored results). */
+        /** No stored results yet. */
         NOT_REQUESTED,
         /** Every analyzed claim classified. */
         COMPLETED,
@@ -27,9 +27,19 @@ public class ClaimVerificationResponse {
         FAILED
     }
 
+    public enum Mode {
+        /** Deterministic citation checks only: no model call, no support classes. */
+        QUICK,
+        /** Deterministic checks plus one model call that assesses grounding. */
+        DEEP
+    }
+
     private UUID messageId;
 
     private Status status;
+
+    /** Which layer produced this result; null when nothing has been checked. */
+    private Mode mode;
 
     /** Deterministic fraction of analyzed claims citing ≥1 valid source (null when no claims). */
     private Double coverage;

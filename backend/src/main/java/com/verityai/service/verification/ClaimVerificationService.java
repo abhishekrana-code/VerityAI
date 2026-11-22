@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.verityai.dto.response.ClaimVerificationResponse;
 import com.verityai.dto.response.ClaimVerificationResponse.ClaimResult;
 import com.verityai.dto.response.ClaimVerificationResponse.InvalidReference;
+import com.verityai.dto.response.ClaimVerificationResponse.Mode;
 import com.verityai.dto.response.ClaimVerificationResponse.Status;
 import com.verityai.entity.Message;
 import com.verityai.entity.MessageCitation;
@@ -114,6 +115,8 @@ public class ClaimVerificationService {
         }
 
         response.setStatus(drafts.stream().allMatch(d -> d.supportClass != null) ? Status.COMPLETED : Status.PARTIAL);
+        // A stored row without a model never went through the model layer.
+        response.setMode(rows.stream().anyMatch(row -> row.getModel() != null) ? Mode.DEEP : Mode.QUICK);
         response.setModel(rows.get(0).getModel());
         response.setVerifiedAt(rows.get(0).getVerifiedAt());
         response.setCoverage(coverage(drafts));
@@ -122,8 +125,20 @@ public class ClaimVerificationService {
         return response;
     }
 
-    /** Runs verification: deterministic checks + one bounded model call; stores results. */
+    /** Deep check: deterministic checks + one bounded model call; stores results. */
     public ClaimVerificationResponse verify(UUID conversationId, UUID messageId) {
+        return verify(conversationId, messageId, Mode.DEEP);
+    }
+
+    /**
+     * Runs one of the two layers and stores what it found.
+     *
+     * <p>{@link Mode#QUICK} is deterministic and free: it records citation
+     * coverage and marks uncited claims UNSUPPORTED, leaving cited claims
+     * unclassified (status PARTIAL). {@link Mode#DEEP} adds the model's
+     * grounding assessment. Neither mode presents a quick result as support.</p>
+     */
+    public ClaimVerificationResponse verify(UUID conversationId, UUID messageId, Mode mode) {
         Message message = loadMessage(conversationId, messageId);
         if (message.getRole() != Message.MessageRole.ASSISTANT) {
             throw ApiException.validation("Only assistant messages can be verified");
@@ -148,8 +163,9 @@ public class ClaimVerificationService {
         response.setCoverage(coverage(drafts));
 
         if (drafts.isEmpty()) {
-            // Nothing to verify (e.g. an empty/very short answer) — not a failure.
+            // Nothing to check (e.g. an empty/very short answer) — not a failure.
             response.setStatus(Status.COMPLETED);
+            response.setMode(mode);
             response.setClaims(List.of());
             response.setInvalidReferences(List.of());
             return response;
@@ -163,6 +179,21 @@ public class ClaimVerificationService {
                     ? "No source is cited for this claim."
                     : "Citation [" + draft.invalidRefs.iterator().next() + "] does not match the available sources.";
             }
+        }
+
+        if (mode == Mode.QUICK) {
+            // Record the deterministic result so the answer keeps a trust line
+            // without spending a model call. Cited claims stay unclassified:
+            // citing a source is not the same as being supported by it.
+            persist(messageId, message, drafts, null);
+            boolean allClassified = drafts.stream().allMatch(d -> d.supportClass != null);
+            response.setStatus(allClassified ? Status.COMPLETED : Status.PARTIAL);
+            response.setMode(Mode.QUICK);
+            response.setModel(null);
+            response.setVerifiedAt(java.time.Instant.now());
+            response.setClaims(toResults(drafts));
+            response.setInvalidReferences(toInvalidReferences(drafts));
+            return response;
         }
 
         List<ClaimDraft> pending = drafts.stream().filter(d -> d.supportClass == null).toList();
@@ -194,6 +225,7 @@ public class ClaimVerificationService {
             // Nothing trustworthy to store — report the failure and keep the
             // message NOT_REQUESTED so a retry is clean.
             response.setStatus(Status.FAILED);
+            response.setMode(Mode.DEEP);
             response.setError(error != null ? error : "No claims could be classified.");
             response.setClaims(toResults(drafts));
             response.setInvalidReferences(toInvalidReferences(drafts));
@@ -202,6 +234,7 @@ public class ClaimVerificationService {
 
         persist(messageId, message, drafts, usedModel);
         response.setStatus(classified == drafts.size() ? Status.COMPLETED : Status.PARTIAL);
+        response.setMode(Mode.DEEP);
         response.setModel(usedModel);
         response.setVerifiedAt(java.time.Instant.now());
         response.setClaims(toResults(drafts));
