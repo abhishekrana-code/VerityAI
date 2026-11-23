@@ -48,6 +48,11 @@ export interface Document {
   summaryError?: string | null;
   /** Latest persistent processing stage (e.g. UPLOADED, QUEUED, EXTRACTING, CHUNKING, INDEXING, COMPLETED, FAILED) */
   processingStage?: string | null;
+  /**
+   * False when the original PDF is no longer on the server. Extracted text,
+   * summaries and citations still work; preview and download do not.
+   */
+  fileAvailable?: boolean;
   tags?: TagRef[];
   collections?: CollectionRef[];
 }

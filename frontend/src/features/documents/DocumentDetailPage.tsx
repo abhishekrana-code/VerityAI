@@ -211,6 +211,14 @@ export function DocumentDetailPage() {
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold truncate">{doc.originalFilename}</h1>
             <ProcessingStepper status={doc.status} stage={doc.processingStage} />
+            {doc.fileAvailable === false && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                title="The original PDF is no longer stored on the server. Extracted text, summaries and citations still work."
+              >
+                <AlertCircle className="h-3 w-3" /> PDF unavailable
+              </span>
+            )}
           </div>
           <p className="text-muted-foreground text-sm">
             {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
@@ -220,6 +228,12 @@ export function DocumentDetailPage() {
               <> • Summary: {SUMMARY_STATUS_LABELS[doc.summaryStatus ?? 'NONE'] ?? 'not generated'}</>
             )}
           </p>
+          {doc.fileAvailable === false && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              The original PDF is not on the server, so preview and download are unavailable.
+              Extracted text, summaries, citations and answers still work.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {doc.status === 'READY' && (
@@ -244,7 +258,11 @@ export function DocumentDetailPage() {
           )}
           <button
             onClick={() => setPreviewOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+            disabled={doc.fileAvailable === false}
+            title={doc.fileAvailable === false
+              ? 'The original PDF is no longer stored on the server'
+              : undefined}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <Eye className="h-4 w-4" /> Preview
           </button>
@@ -300,6 +318,13 @@ export function DocumentDetailPage() {
         <DocumentEntitiesTab
           documentId={doc.id}
           onOpenPage={(page) => {
+            if (doc.fileAvailable === false) {
+              toast({
+                title: 'PDF unavailable',
+                description: 'This page can no longer be shown because the original PDF is not on the server. The extracted text and citations still work.',
+              });
+              return;
+            }
             setPreviewPage(page);
             setPreviewOpen(true);
           }}

@@ -29,6 +29,12 @@ public class DocumentResponse {
     private String summaryError;
     /** Latest processing stage, when a processing history exists. */
     private String processingStage;
+    /**
+     * Whether the originally uploaded PDF is still on the server's upload
+     * volume. False means preview/download cannot work, while the extracted
+     * text, summaries and citations remain available.
+     */
+    private Boolean fileAvailable;
     /** Tags attached to this document (populated on list/detail reads). */
     private List<TagResponse> tags;
     /** Collections containing this document (populated on list/detail reads). */

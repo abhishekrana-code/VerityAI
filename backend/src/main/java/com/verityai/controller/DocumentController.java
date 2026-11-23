@@ -388,6 +388,10 @@ public class DocumentController {
             resp.setChunkCount(chunkCounts.getOrDefault(d.getId(), 0L).intValue());
             resp.setSummaryStatus(d.getSummaryStatus() == null ? "NONE" : d.getSummaryStatus().name());
             resp.setSummaryError(d.getSummaryError());
+            // The file is the only part of a document that can disappear
+            // independently of its row; report it so the UI can disable
+            // preview/download without hiding the processed content.
+            resp.setFileAvailable(Files.exists(documentService.resolvePath(d)));
 
             DocumentProcessingEvent latest = latestEvents.get(d.getId());
             if (latest != null) {

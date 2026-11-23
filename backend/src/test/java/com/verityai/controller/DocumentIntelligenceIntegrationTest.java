@@ -11,11 +11,15 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import com.verityai.repository.DocumentRepository;
+import com.verityai.service.document.DocumentService;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.UUID;
 
@@ -58,6 +62,8 @@ class DocumentIntelligenceIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private DocumentRepository documentRepository;
+    @Autowired private DocumentService documentService;
 
     private record Csrf(Cookie cookie, String token) {}
 
@@ -149,6 +155,35 @@ class DocumentIntelligenceIntegrationTest {
         Csrf otherCsrf = csrf(other);
         String otherDocId = upload(other, otherCsrf, filename);
         assertThat(otherDocId).isNotEqualTo(ownerDocId);
+    }
+
+    @Test
+    void detailReportsWhenTheStoredFileIsMissing() throws Exception {
+        Cookie session = register(uniqueEmail());
+        Csrf csrf = csrf(session);
+        String docId = upload(session, csrf, "missing-file.pdf");
+
+        mockMvc.perform(get("/api/v1/documents/" + docId).cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.originalFilename").value("missing-file.pdf"))
+            .andExpect(jsonPath("$.fileAvailable").value(true));
+
+        Path stored = documentService.resolvePath(
+            documentRepository.findById(UUID.fromString(docId)).orElseThrow());
+        Files.deleteIfExists(stored);
+
+        // The row and everything derived from it stay intact and readable;
+        // only the file-backed actions are reported as unavailable.
+        mockMvc.perform(get("/api/v1/documents/" + docId).cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.originalFilename").value("missing-file.pdf"))
+            .andExpect(jsonPath("$.fileAvailable").value(false));
+        mockMvc.perform(get("/api/v1/documents/" + docId + "/file").cookie(session))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/documents/" + docId + "/summaries").cookie(session))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/documents/" + docId + "/processing").cookie(session))
+            .andExpect(status().isOk());
     }
 
     // ------------------------------------------------------------------

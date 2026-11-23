@@ -615,6 +615,14 @@ function DocumentCard({
         </div>
       </div>
       <h3 className="font-medium truncate mb-1" title={doc.originalFilename}>{doc.originalFilename}</h3>
+      {doc.fileAvailable === false && (
+        <p
+          className="mb-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+          title="The original PDF is no longer stored on the server. Extracted text, summaries and citations still work."
+        >
+          <AlertCircle className="h-3 w-3" /> PDF unavailable
+        </p>
+      )}
       <p className="text-xs text-muted-foreground mb-2">
         {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
         {formatFileSize(doc.sizeBytes)} •{' '}
@@ -738,6 +746,14 @@ function DocumentTable({
                     <span className="font-medium truncate max-w-[220px]" title={doc.originalFilename}>
                       {doc.originalFilename}
                     </span>
+                    {doc.fileAvailable === false && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0"
+                        title="The original PDF is no longer stored on the server. Extracted text, summaries and citations still work."
+                      >
+                        <AlertCircle className="h-3 w-3" /> PDF unavailable
+                      </span>
+                    )}
                   </div>
                   {doc.errorMessage && (
                     <p className="text-xs text-destructive mt-0.5 truncate max-w-[220px]" title={doc.errorMessage}>
