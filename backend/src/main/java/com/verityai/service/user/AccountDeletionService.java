@@ -1,6 +1,5 @@
 package com.verityai.service.user;
 
-import com.verityai.entity.Document;
 import com.verityai.entity.User;
 import com.verityai.exception.ApiException;
 import com.verityai.repository.DocumentRepository;
@@ -50,6 +49,9 @@ public class AccountDeletionService {
      */
     @Transactional
     public String deleteAccount(User user, String password) {
+        if (user == null) {
+            throw ApiException.unauthenticated("Authentication required");
+        }
         User current = userRepository.findById(user.getId())
             .filter(candidate -> candidate.getDeletedAt() == null)
             .orElseThrow(() -> ApiException.unauthenticated("Authentication required"));
@@ -60,26 +62,23 @@ public class AccountDeletionService {
 
         UUID userId = current.getId();
         Path root = Paths.get(uploadDir).toAbsolutePath();
-        for (Document document : documentRepository.findAllByUserIdIncludingDeleted(userId)) {
+        for (String storedFilename : documentRepository.findStoredFilenamesByUserId(userId)) {
+            Path file = root.resolve(storedFilename);
             try {
-                Files.deleteIfExists(root.resolve(document.getStoredFilename()));
+                Files.deleteIfExists(file);
             } catch (IOException e) {
-                log.warn("Could not delete the stored file for document {} during account deletion",
-                    document.getId(), e);
+                // Deletion must still succeed: the account is going away even if
+                // one file cannot be unlinked. The path makes the leftover findable.
+                log.warn("Could not delete {} during account deletion", file, e);
             }
         }
 
-        // RESTRICT on users, CASCADE below these rows.
+        // documents.user_id and conversations.user_id are ON DELETE RESTRICT;
+        // tags, collections and reset tokens cascade from the user row itself.
         entityManager.createQuery("DELETE FROM Document d WHERE d.user.id = :userId")
             .setParameter("userId", userId)
             .executeUpdate();
         entityManager.createQuery("DELETE FROM Conversation c WHERE c.user.id = :userId")
-            .setParameter("userId", userId)
-            .executeUpdate();
-        entityManager.createQuery("DELETE FROM Tag t WHERE t.user.id = :userId")
-            .setParameter("userId", userId)
-            .executeUpdate();
-        entityManager.createQuery("DELETE FROM Collection c WHERE c.user.id = :userId")
             .setParameter("userId", userId)
             .executeUpdate();
 
@@ -87,8 +86,6 @@ public class AccountDeletionService {
         entityManager.createQuery("DELETE FROM User u WHERE u.id = :userId")
             .setParameter("userId", userId)
             .executeUpdate();
-        entityManager.flush();
-        entityManager.clear();
         log.info("Deleted account {} and all of its stored data", userId);
         return email;
     }
