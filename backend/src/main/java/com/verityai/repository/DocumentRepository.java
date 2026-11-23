@@ -28,6 +28,10 @@ public interface DocumentRepository extends JpaRepository<Document, UUID>, JpaSp
 
     Optional<Document> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
 
+    /** Every stored filename, for the orphan sweep (includes soft-deleted rows). */
+    @Query("SELECT d.storedFilename FROM Document d")
+    List<String> findAllStoredFilenames();
+
     /** Stored filenames of every document a user owns, including soft-deleted ones. */
     @Query("SELECT d.storedFilename FROM Document d WHERE d.user.id = :userId")
     List<String> findStoredFilenamesByUserId(@Param("userId") UUID userId);
