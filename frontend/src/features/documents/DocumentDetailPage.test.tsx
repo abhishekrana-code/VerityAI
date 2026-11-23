@@ -41,7 +41,8 @@ const deferredSummaries: DocumentSummariesResponse = {
   summaries: [],
 };
 
-function mockDocument(summaries: DocumentSummariesResponse) {
+function mockDocument(summaries: DocumentSummariesResponse, overrides: Partial<Document> = {}) {
+  const document = { ...doc, ...overrides };
   get.mockImplementation((endpoint: string) => {
     if (endpoint.endsWith('/processing')) {
       return Promise.resolve({
@@ -52,7 +53,7 @@ function mockDocument(summaries: DocumentSummariesResponse) {
       });
     }
     if (endpoint.endsWith('/summaries')) return Promise.resolve(summaries);
-    if (endpoint === '/documents/doc-1') return Promise.resolve(doc);
+    if (endpoint === '/documents/doc-1') return Promise.resolve(document);
     return Promise.reject(new Error(`unexpected GET ${endpoint}`));
   });
 }
@@ -96,6 +97,18 @@ describe('DocumentDetailPage summary tab', () => {
     await user.click(await screen.findByRole('button', { name: /retry summary/i }));
 
     expect(post).toHaveBeenCalledWith('/documents/doc-1/summaries/regenerate');
+  });
+
+  it('disables preview but keeps asking when the stored PDF is missing', async () => {
+    const ready = { documentId: 'doc-1', summaryStatus: 'READY' as const, summaryError: null, summaries: [] };
+    mockDocument(ready, { fileAvailable: false });
+    renderPage();
+
+    expect(await screen.findByText('PDF unavailable')).toBeInTheDocument();
+    expect(screen.getByText(/preview and download are unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /preview/i })).toBeDisabled();
+    // The processed content is the point of the document: asking still works.
+    expect(screen.getByRole('button', { name: /ask about this document/i })).toBeEnabled();
   });
 
   it('treats PENDING without a reason as generating and blocks the button', async () => {

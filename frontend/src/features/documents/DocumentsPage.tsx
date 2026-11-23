@@ -21,6 +21,7 @@ import { cn, formatFileSize, pluralize } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { UploadDropzone } from '@/components/UploadDropzone';
 import { ProcessingStepper } from '@/components/ProcessingStepper';
+import { PdfUnavailableBadge } from '@/components/PdfUnavailableBadge';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/hooks/useToast';
@@ -616,12 +617,9 @@ function DocumentCard({
       </div>
       <h3 className="font-medium truncate mb-1" title={doc.originalFilename}>{doc.originalFilename}</h3>
       {doc.fileAvailable === false && (
-        <p
-          className="mb-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
-          title="The original PDF is no longer stored on the server. Extracted text, summaries and citations still work."
-        >
-          <AlertCircle className="h-3 w-3" /> PDF unavailable
-        </p>
+        <div className="mb-1">
+          <PdfUnavailableBadge />
+        </div>
       )}
       <p className="text-xs text-muted-foreground mb-2">
         {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
@@ -747,12 +745,7 @@ function DocumentTable({
                       {doc.originalFilename}
                     </span>
                     {doc.fileAvailable === false && (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0"
-                        title="The original PDF is no longer stored on the server. Extracted text, summaries and citations still work."
-                      >
-                        <AlertCircle className="h-3 w-3" /> PDF unavailable
-                      </span>
+                      <PdfUnavailableBadge className="flex-shrink-0" />
                     )}
                   </div>
                   {doc.errorMessage && (

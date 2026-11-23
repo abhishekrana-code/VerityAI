@@ -27,6 +27,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PdfPreviewModal } from '@/components/PdfPreviewModal';
+import { PdfUnavailableBadge } from '@/components/PdfUnavailableBadge';
 import { useToast } from '@/hooks/useToast';
 
 type Tab = 'summary' | 'entities' | 'processing' | 'details';
@@ -211,14 +212,7 @@ export function DocumentDetailPage() {
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold truncate">{doc.originalFilename}</h1>
             <ProcessingStepper status={doc.status} stage={doc.processingStage} />
-            {doc.fileAvailable === false && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
-                title="The original PDF is no longer stored on the server. Extracted text, summaries and citations still work."
-              >
-                <AlertCircle className="h-3 w-3" /> PDF unavailable
-              </span>
-            )}
+            {doc.fileAvailable === false && <PdfUnavailableBadge />}
           </div>
           <p className="text-muted-foreground text-sm">
             {doc.pageCount ? `${pluralize(doc.pageCount, 'page')} • ` : ''}
@@ -259,9 +253,6 @@ export function DocumentDetailPage() {
           <button
             onClick={() => setPreviewOpen(true)}
             disabled={doc.fileAvailable === false}
-            title={doc.fileAvailable === false
-              ? 'The original PDF is no longer stored on the server'
-              : undefined}
             className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           >
             <Eye className="h-4 w-4" /> Preview
