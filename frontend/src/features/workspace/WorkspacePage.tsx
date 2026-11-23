@@ -323,7 +323,7 @@ function ConversationItem({ conv, onDelete }: { conv: Conversation; onDelete: ()
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-medium">{conv.title}</h3>
           <p className="text-xs text-muted-foreground">
-            {conv.messageCount} messages • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
+            {pluralize(conv.messageCount, 'message')} • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
           </p>
           {conv.documents.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">

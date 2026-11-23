@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { FileText, ChevronLeft, ChevronRight, X, Loader2, AlertCircle } from 'lucide-react';
+import { pluralize } from '@/lib/utils';
 
 /**
  * Minimal document shape needed to preview a PDF. `Document` from the API
@@ -104,7 +105,7 @@ export function PdfPreviewModal({
             <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium truncate">{doc.originalFilename}</span>
             <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">
-              {totalPages ? `${totalPages} pages` : ''}
+              {totalPages ? pluralize(totalPages, 'page') : ''}
             </span>
           </div>
           <div className="flex items-center gap-2">

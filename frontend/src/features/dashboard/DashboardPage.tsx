@@ -253,7 +253,7 @@ export function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium truncate">{conv.title}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {conv.messageCount} messages • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
+                        {pluralize(conv.messageCount, 'message')} • {formatDistanceToNow(new Date(conv.updatedAt), { addSuffix: true })}
                       </p>
                     </div>
                   </Link>
