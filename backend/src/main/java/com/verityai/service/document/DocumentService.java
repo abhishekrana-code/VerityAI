@@ -169,26 +169,25 @@ public class DocumentService {
             runAfterCommit(savedDocument.getId(), () -> processDocument(savedDocument.getId(), filePath));
 
             return document;
-        } catch (DataIntegrityViolationException e) {
-            deleteFileQuietly(filePath);
-            if (isMissingAccount(e)) {
-                throw ApiException.conflict("This account no longer exists. Sign in again.");
-            }
-            throw e;
         } catch (RuntimeException e) {
             // Covers callers without an active transaction, where afterCompletion
             // never runs; deleteIfExists makes a second cleanup harmless.
             deleteFileQuietly(filePath);
+            if (isMissingAccount(e)) {
+                throw ApiException.conflict("This account no longer exists. Sign in again.");
+            }
             throw e;
         }
     }
 
     /**
      * A 23503 foreign-key violation on this insert means the account was deleted
-     * while the upload was in flight (documents.user_id is the only FK it writes).
+     * while the upload was in flight: documents.user_id is the only foreign key
+     * the insert writes, so no other constraint can report that SQLState here.
      */
-    private static boolean isMissingAccount(DataIntegrityViolationException e) {
-        return e.getMostSpecificCause() instanceof SQLException sql
+    private static boolean isMissingAccount(RuntimeException e) {
+        return e instanceof DataIntegrityViolationException integrity
+            && integrity.getMostSpecificCause() instanceof SQLException sql
             && "23503".equals(sql.getSQLState());
     }
 

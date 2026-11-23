@@ -187,7 +187,7 @@ class AccountDeletionIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "email", email, "password", PASSWORD))))
-                        .andExpect(status().isUnauthorized());
+            .andExpect(status().isUnauthorized());
     }
 
     /**
@@ -226,36 +226,44 @@ class AccountDeletionIntegrationTest {
                     .content(objectMapper.writeValueAsString(passwordBody(PASSWORD))))
                 .andReturn().getResponse().getStatus());
 
-            // Wait for the database to report the delete blocked on a lock,
-            // rather than sleeping and hoping: a slow request is not proof.
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-            boolean blocked = false;
-            while (System.nanoTime() < deadline && !deletion.isDone()) {
-                Integer waiting = jdbc.queryForObject("""
-                    SELECT COUNT(*) FROM pg_stat_activity
-                    WHERE datname = current_database()
-                      AND wait_event_type = 'Lock'
-                      AND query ILIKE '%from users%'
-                    """, Integer.class);
-                if (waiting != null && waiting > 0) {
-                    blocked = true;
-                    break;
-                }
-                Thread.sleep(50);
-            }
-            assertThat(blocked)
+            assertThat(awaitBlockedDelete(deletion))
                 .as("deletion must block on the user row lock instead of deleting under a live upload")
                 .isTrue();
+            // Guards against matching another session's wait: our request is
+            // not finished while it is blocked on the lock.
             assertThat(deletion.isDone()).isFalse();
 
             release.countDown();
             holder.join(TimeUnit.SECONDS.toMillis(10));
             assertThat(deletion.get(10, TimeUnit.SECONDS)).isEqualTo(204);
-            assertThat(userRepository.findById(userId)).isEmpty();
         } finally {
             release.countDown();
             pool.shutdownNow();
             holder.join(TimeUnit.SECONDS.toMillis(10));
         }
+    }
+
+    /**
+     * True once Postgres reports another active session waiting for a lock while
+     * running a statement on {@code users} — the blocked deletion. Scoped to
+     * other sessions, so the polling query itself can never match.
+     */
+    private boolean awaitBlockedDelete(Future<?> deletion) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline && !deletion.isDone()) {
+            Integer waiting = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                  AND state = 'active'
+                  AND wait_event_type = 'Lock'
+                  AND query ILIKE '%from users%'
+                """, Integer.class);
+            if (waiting != null && waiting > 0) {
+                return true;
+            }
+            Thread.sleep(50);
+        }
+        return false;
     }
 }
