@@ -43,7 +43,7 @@ In `.env`:
 
 ```dotenv
 APP_BASE_URL=https://verityai.<tailnet>.ts.net
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://verityai.<tailnet>.ts.net
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080,https://verityai.<tailnet>.ts.net
 # Empty: the SPA calls /api/v1 on its own origin, which nginx proxies.
 VITE_API_BASE_URL=
 # Funnel terminates TLS, but nginx forwards X-Forwarded-Proto: http, so keep the
