@@ -27,11 +27,14 @@ import java.util.UUID;
  * {@code DELETE FROM users} removes the account, its documents, conversations,
  * tags, collections and every child row through them (cascades in V1–V10).</p>
  *
- * <p>The user row is locked first. An upload's foreign-key check needs a KEY
- * SHARE lock on that row, so a concurrent upload waits here and then fails
- * cleanly once the row is gone — its own rollback deletes the file it had
- * already written. Nothing can be inserted between reading the file list and
- * deleting the rows.</p>
+ * <p>The cascade alone keeps the <em>rows</em> consistent: an upload that
+ * commits before the delete is cascaded away with the account, and one that
+ * arrives afterwards fails its own foreign key. It cannot keep the <em>file
+ * list</em> complete, though — a document inserted between reading the
+ * filenames and deleting the user would disappear with its PDF still on disk.
+ * So the user row is locked first: an upload's foreign-key check needs a KEY
+ * SHARE lock on that row, waits here, and then fails cleanly (its own rollback
+ * removes the file it wrote).</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -58,7 +61,6 @@ public class AccountDeletionService {
         }
         UUID userId = user.getId();
         User current = userRepository.findByIdForUpdate(userId)
-            .filter(candidate -> candidate.getDeletedAt() == null)
             .orElseThrow(() -> ApiException.unauthenticated("Authentication required"));
 
         if (!passwordEncoder.matches(password, current.getPasswordHash())) {

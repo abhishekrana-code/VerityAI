@@ -19,6 +19,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -75,6 +76,7 @@ class AccountDeletionIntegrationTest {
     @Autowired private MessageRepository messageRepository;
     @Autowired private TagRepository tagRepository;
     @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private JdbcTemplate jdbc;
 
     private Cookie register(String email) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
@@ -224,12 +226,27 @@ class AccountDeletionIntegrationTest {
                     .content(objectMapper.writeValueAsString(passwordBody(PASSWORD))))
                 .andReturn().getResponse().getStatus());
 
-            // The password check takes a moment; after that the request must
-            // block on the row lock instead of finishing.
-            Thread.sleep(700);
-            assertThat(deletion.isDone())
-                .as("deletion must wait for the user row lock instead of deleting under a live upload")
-                .isFalse();
+            // Wait for the database to report the delete blocked on a lock,
+            // rather than sleeping and hoping: a slow request is not proof.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            boolean blocked = false;
+            while (System.nanoTime() < deadline && !deletion.isDone()) {
+                Integer waiting = jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM pg_stat_activity
+                    WHERE datname = current_database()
+                      AND wait_event_type = 'Lock'
+                      AND query ILIKE '%from users%'
+                    """, Integer.class);
+                if (waiting != null && waiting > 0) {
+                    blocked = true;
+                    break;
+                }
+                Thread.sleep(50);
+            }
+            assertThat(blocked)
+                .as("deletion must block on the user row lock instead of deleting under a live upload")
+                .isTrue();
+            assertThat(deletion.isDone()).isFalse();
 
             release.countDown();
             holder.join(TimeUnit.SECONDS.toMillis(10));
