@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.verityai.entity.Conversation;
 import com.verityai.entity.Document;
+import com.verityai.entity.Message;
 import com.verityai.entity.Tag;
 import com.verityai.entity.User;
 import com.verityai.repository.ConversationRepository;
 import com.verityai.repository.DocumentRepository;
+import com.verityai.repository.MessageRepository;
 import com.verityai.repository.TagRepository;
 import com.verityai.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -20,6 +22,8 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -29,6 +33,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -63,7 +72,9 @@ class AccountDeletionIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private DocumentRepository documentRepository;
     @Autowired private ConversationRepository conversationRepository;
+    @Autowired private MessageRepository messageRepository;
     @Autowired private TagRepository tagRepository;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     private Cookie register(String email) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/register")
@@ -128,6 +139,11 @@ class AccountDeletionIntegrationTest {
         conversation.setUser(owner);
         conversation.setTitle("Delete me");
         conversation = conversationRepository.save(conversation);
+        Message message = new Message();
+        message.setConversation(conversation);
+        message.setRole(Message.MessageRole.USER);
+        message.setContent("What is this report about?");
+        message = messageRepository.save(message);
         Tag tag = new Tag();
         tag.setUser(owner);
         tag.setName("private-" + UUID.randomUUID());
@@ -154,6 +170,7 @@ class AccountDeletionIntegrationTest {
         assertThat(userRepository.findById(userId)).isEmpty();
         assertThat(documentRepository.findById(document.getId())).isEmpty();
         assertThat(conversationRepository.findById(conversation.getId())).isEmpty();
+        assertThat(messageRepository.findById(message.getId())).isEmpty();
         assertThat(tagRepository.findById(tag.getId())).isEmpty();
         assertThat(Files.exists(storedFile)).isFalse();
 
@@ -168,6 +185,60 @@ class AccountDeletionIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "email", email, "password", PASSWORD))))
-            .andExpect(status().isUnauthorized());
+                        .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * The race the cascade closes: deletion locks the user row, and an upload's
+     * foreign-key check needs a lock on that same row, so an upload can never
+     * commit a document between the delete's read and its write.
+     */
+    @Test
+    void deletionWaitsForTheUserRowLockSoAnUploadCannotLandMidDelete() throws Exception {
+        String email = "locked-" + UUID.randomUUID() + "@example.com";
+        Cookie session = register(email);
+        Csrf csrf = csrf(session.getValue());
+        UUID userId = userRepository.findByEmailIgnoreCase(email).orElseThrow().getId();
+
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread holder = new Thread(() -> new TransactionTemplate(transactionManager)
+            .executeWithoutResult(status -> {
+                userRepository.findByIdForUpdate(userId).orElseThrow();
+                locked.countDown();
+                try {
+                    release.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+        holder.start();
+        assertThat(locked.await(10, TimeUnit.SECONDS)).as("holder acquired the row lock").isTrue();
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> deletion = pool.submit(() -> mockMvc.perform(delete("/api/v1/users/me")
+                    .cookie(session, csrf.cookie())
+                    .header("X-XSRF-TOKEN", csrf.token())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(passwordBody(PASSWORD))))
+                .andReturn().getResponse().getStatus());
+
+            // The password check takes a moment; after that the request must
+            // block on the row lock instead of finishing.
+            Thread.sleep(700);
+            assertThat(deletion.isDone())
+                .as("deletion must wait for the user row lock instead of deleting under a live upload")
+                .isFalse();
+
+            release.countDown();
+            holder.join(TimeUnit.SECONDS.toMillis(10));
+            assertThat(deletion.get(10, TimeUnit.SECONDS)).isEqualTo(204);
+            assertThat(userRepository.findById(userId)).isEmpty();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            holder.join(TimeUnit.SECONDS.toMillis(10));
+        }
     }
 }
