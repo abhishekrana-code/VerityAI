@@ -15,8 +15,8 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -27,16 +27,21 @@ import java.util.stream.Stream;
  * The sweep is opt-in ({@code verityai.upload.reconcile.enabled=true}) because
  * silently deleting files on upgrade is not a safe default.</p>
  *
- * <p>Only regular {@code .pdf} files older than the grace period are candidates.
- * An upload writes its file before inserting the row, and a concurrent account
- * deletion can hold that insert for a moment, so a young file without a row is
- * normal and must survive.</p>
+ * <p>Only files this app wrote — a UUID filename ending in {@code .pdf} — older
+ * than the grace period are candidates. Anything else in the directory is never
+ * touched. An upload writes its file before inserting the row, and a concurrent
+ * account deletion can hold that insert for a moment, so a young file without a
+ * row is normal and must survive.</p>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(name = "verityai.upload.reconcile.enabled", havingValue = "true")
 public class OrphanFileReconciler {
+
+    /** The only names this app stores: {@code UUID.randomUUID() + ".pdf"}. */
+    private static final Pattern STORED_NAME = Pattern.compile(
+        "[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\\.pdf");
 
     private final DocumentRepository documentRepository;
 
@@ -85,7 +90,7 @@ public class OrphanFileReconciler {
             return false;
         }
         String name = file.getFileName().toString();
-        if (!name.toLowerCase(Locale.ROOT).endsWith(".pdf") || referenced.contains(name)) {
+        if (!STORED_NAME.matcher(name).matches() || referenced.contains(name)) {
             return false;
         }
         try {

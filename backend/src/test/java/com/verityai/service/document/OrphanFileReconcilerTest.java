@@ -16,6 +16,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -45,27 +46,28 @@ class OrphanFileReconcilerTest {
     }
 
     @Test
-    void removesOnlyAgedUnreferencedPdfs() throws IOException {
+    void removesOnlyAgedUnreferencedFilesTheAppWrote() throws IOException {
         Instant old = Instant.now().minus(2, ChronoUnit.HOURS);
-        Path referenced = write("referenced.pdf", old);
-        Path orphan = write("orphan.pdf", old);
-        Path inFlight = write("in-flight.pdf", Instant.now());
-        Path notAPdf = write("notes.txt", old);
+        String referencedName = UUID.randomUUID() + ".pdf";
+        Path referenced = write(referencedName, old);
+        Path orphan = write(UUID.randomUUID() + ".pdf", old);
+        Path inFlight = write(UUID.randomUUID() + ".pdf", Instant.now());
+        Path notStoredByUs = write("operator-copy.pdf", old);
 
-        when(documentRepository.findAllStoredFilenames()).thenReturn(List.of("referenced.pdf"));
+        when(documentRepository.findAllStoredFilenames()).thenReturn(List.of(referencedName));
 
         reconciler.reconcile();
 
         assertThat(orphan).doesNotExist();
         assertThat(referenced).exists();
         assertThat(inFlight).as("an upload may write its file before inserting the row").exists();
-        assertThat(notAPdf).as("the sweep only owns stored PDFs").exists();
+        assertThat(notStoredByUs).as("a PDF this app did not write").exists();
     }
 
     @Test
     void doesNothingWhenTheReferencedFilenamesCannotBeRead() throws IOException {
         Instant old = Instant.now().minus(2, ChronoUnit.HOURS);
-        Path orphan = write("orphan.pdf", old);
+        Path orphan = write(UUID.randomUUID() + ".pdf", old);
         when(documentRepository.findAllStoredFilenames())
             .thenThrow(new IllegalStateException("database unavailable"));
 
