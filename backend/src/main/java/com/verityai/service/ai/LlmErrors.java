@@ -1,35 +1,28 @@
 package com.verityai.service.ai;
 
-import java.net.http.HttpTimeoutException;
-
 /**
- * Turns provider failures into one user-facing message.
+ * One user-facing message for LLM failures.
  *
- * <p>Raw provider text can carry status codes, endpoint hosts or fragments of
- * a key, and it is not something a reader can act on. The technical cause is
- * logged server-side; the browser only ever sees this message.</p>
+ * <p>Provider text can carry status codes, endpoint hosts or fragments of a
+ * key, and none of it is actionable for a reader. The technical cause is logged
+ * server-side; the browser only ever sees these messages.</p>
  */
 public final class LlmErrors {
 
-    /** Transient: rate limit, 5xx, timeout or a dropped connection. */
+    /** Worth retrying: rate limit, 5xx, timeout, dropped connection (status 0). */
     public static final String BUSY = "The AI service is busy. Try again in a minute.";
 
-    /** Anything else (bad key, rejected request, unparsable response). */
+    /** A retry will not fix it by itself: bad key, rejected request, bad response. */
     public static final String UNAVAILABLE =
-        "The AI service could not complete this request. Try again, or check the server's LLM configuration.";
+        "The AI service is not available right now. Try again later, or tell the administrator.";
 
     private LlmErrors() {
     }
 
     public static String friendlyMessage(Throwable error) {
-        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-            if (cause instanceof HttpTimeoutException) {
-                return BUSY;
-            }
-            if (cause instanceof OpenAiCompatibleLlmService.LlmProviderException provider) {
-                int status = provider.getStatusCode();
-                return status == 429 || status >= 500 || status == 0 ? BUSY : UNAVAILABLE;
-            }
+        if (error instanceof OpenAiCompatibleLlmService.LlmProviderException provider) {
+            int status = provider.getStatusCode();
+            return status == 429 || status >= 500 || status == 0 ? BUSY : UNAVAILABLE;
         }
         return UNAVAILABLE;
     }

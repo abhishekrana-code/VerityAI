@@ -62,7 +62,7 @@ public class OpenAiCompatibleLlmService implements LlmService {
     public ChatResponse generate(ChatRequest request) {
         String prompt = buildPrompt(request.question(), request.evidence());
 
-        ProviderRequest groqRequest = new ProviderRequest(
+        ProviderRequest providerRequest = new ProviderRequest(
             request.model() != null ? request.model() : model,
             List.of(
                 new ProviderMessage("system", SYSTEM_PROMPT),
@@ -73,13 +73,13 @@ public class OpenAiCompatibleLlmService implements LlmService {
             1.0
         );
 
-        RawResponse raw = postChat(groqRequest);
+        RawResponse raw = postChat(providerRequest);
         return parseResponse(raw.body(), raw.latencyMs());
     }
 
     @Override
     public CompletionResponse complete(CompletionRequest request) {
-        ProviderRequest groqRequest = new ProviderRequest(
+        ProviderRequest providerRequest = new ProviderRequest(
             request.model() != null ? request.model() : model,
             List.of(
                 new ProviderMessage("system", request.system()),
@@ -90,7 +90,7 @@ public class OpenAiCompatibleLlmService implements LlmService {
             1.0
         );
 
-        RawResponse raw = postChat(groqRequest);
+        RawResponse raw = postChat(providerRequest);
         try {
             JsonNode root = objectMapper.readTree(raw.body());
             JsonNode choice = root.path("choices").get(0);
@@ -104,17 +104,17 @@ public class OpenAiCompatibleLlmService implements LlmService {
                 request.model() != null ? request.model() : model
             );
         } catch (Exception e) {
-            log.error("Failed to parse Groq completion response", e);
+            log.error("Failed to parse the provider's completion response", e);
             throw new LlmProviderException("Failed to parse response", 0);
         }
     }
 
     /** Shared HTTP transport with bounded retries for 429/5xx/network errors. */
-    private RawResponse postChat(ProviderRequest groqRequest) {
+    private RawResponse postChat(ProviderRequest providerRequest) {
         int attempt = 0;
         while (true) {
             try {
-                String json = objectMapper.writeValueAsString(groqRequest);
+                String json = objectMapper.writeValueAsString(providerRequest);
                 HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
                     .header("Authorization", "Bearer " + apiKey)
@@ -227,7 +227,7 @@ public class OpenAiCompatibleLlmService implements LlmService {
                 citedIndices
             );
         } catch (Exception e) {
-            log.error("Failed to parse Groq response", e);
+            log.error("Failed to parse the provider's chat response", e);
             throw new LlmProviderException("Failed to parse response", 0);
         }
     }

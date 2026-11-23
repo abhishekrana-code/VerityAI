@@ -182,7 +182,7 @@ verityai:
     # Summary tab (or asks for one), not for every upload. Set true to restore
     # the old generate-on-upload behaviour.
     auto-generate: ${SUMMARY_AUTO_GENERATE:false}
-    # Optional dedicated model for summaries; empty = use GROQ_MODEL
+    # Optional dedicated model for summaries; empty = use the chat model
     model: ${SUMMARY_MODEL:}
     # Documents longer than this go through hierarchical segment condensation
     single-pass-chars: ${SUMMARY_SINGLE_PASS_CHARS:48000}

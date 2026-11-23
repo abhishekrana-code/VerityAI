@@ -163,8 +163,9 @@ public class SummaryService {
             try {
                 generate(documentId);
             } catch (Exception e) {
-                log.error("Summary generation failed for document {}", documentId, e);
-                                    markFailed(documentId, LlmErrors.friendlyMessage(e));
+                // generate() handles its own failures; this is an unexpected one.
+                log.error("Summary task failed for document {}", documentId, e);
+                markFailed(documentId, "Summary generation failed.");
             }
         }, documentId);
         if (!accepted) {
@@ -304,7 +305,7 @@ public class SummaryService {
                 documentId, text.length());
         } catch (Exception e) {
             log.error("Summary generation failed for document {}", documentId, e);
-                                markFailed(documentId, LlmErrors.friendlyMessage(e));
+            markFailed(documentId, LlmErrors.friendlyMessage(e));
         }
     }
 
@@ -575,11 +576,6 @@ public class SummaryService {
             return null;
         }
         return s.length() <= max ? s : s.substring(0, max);
-    }
-
-    private static String safeMessage(Exception e) {
-        String m = e.getMessage();
-        return m == null || m.isBlank() ? e.getClass().getSimpleName() : m;
     }
 
     // ------------------------------------------------------------------
