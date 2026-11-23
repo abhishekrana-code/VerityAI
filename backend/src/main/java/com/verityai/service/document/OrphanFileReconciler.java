@@ -27,6 +27,9 @@ import java.util.stream.Stream;
  * The sweep is opt-in ({@code verityai.upload.reconcile.enabled=true}) because
  * silently deleting files on upgrade is not a safe default.</p>
  *
+ * <p>It starts in dry-run mode: enabling it logs what it would delete and
+ * removes nothing until {@code verityai.upload.reconcile.dry-run=false} is set.</p>
+ *
  * <p>Only files this app wrote — a UUID filename ending in {@code .pdf} — older
  * than the grace period are candidates. Anything else in the directory is never
  * touched. An upload writes its file before inserting the row, and a concurrent
@@ -51,6 +54,9 @@ public class OrphanFileReconciler {
     @Value("${verityai.upload.reconcile.grace-minutes:60}")
     private long graceMinutes;
 
+    @Value("${verityai.upload.reconcile.dry-run:true}")
+    private boolean dryRun;
+
     @Scheduled(
         fixedDelayString = "${verityai.upload.reconcile.interval-ms:3600000}",
         initialDelayString = "${verityai.upload.reconcile.initial-delay-ms:60000}")
@@ -70,18 +76,18 @@ public class OrphanFileReconciler {
         }
 
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(graceMinutes));
-        int removed = 0;
+        int orphans = 0;
         try (Stream<Path> entries = Files.list(root)) {
             for (Path file : entries.toList()) {
-                if (isOrphan(file, referenced, cutoff) && delete(file)) {
-                    removed++;
+                if (isOrphan(file, referenced, cutoff) && remove(file)) {
+                    orphans++;
                 }
             }
         } catch (IOException e) {
             log.warn("Could not list upload directory {}", root, e);
         }
-        if (removed > 0) {
-            log.info("Removed {} orphaned upload(s) from {}", removed, root);
+        if (orphans > 0) {
+            log.info("{} {} orphaned upload(s) from {}", dryRun ? "Would remove" : "Removed", orphans, root);
         }
     }
 
@@ -101,9 +107,13 @@ public class OrphanFileReconciler {
         }
     }
 
-    private boolean delete(Path file) {
+    private boolean remove(Path file) {
         try {
             long bytes = Files.size(file);
+            if (dryRun) {
+                log.info("Dry run: would remove orphaned upload {} ({} bytes)", file, bytes);
+                return true;
+            }
             if (Files.deleteIfExists(file)) {
                 log.info("Removed orphaned upload {} ({} bytes)", file, bytes);
                 return true;

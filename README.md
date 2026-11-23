@@ -68,7 +68,7 @@ the Entities tab.
 | `APP_BASE_URL` | empty | Public origin used in password-reset links |
 | `MAIL_*` | empty | Password-reset email; empty disables sending |
 | `MAX_FILE_SIZE_MB` | `25` | Backend limit; nginx accepts up to 30 MB |
-| `UPLOAD_RECONCILE_ENABLED` | `false` | Hourly sweep of stored PDFs that no document references; logs each removal, ignores files younger than `UPLOAD_RECONCILE_GRACE_MINUTES` (60) |
+| `UPLOAD_RECONCILE_ENABLED` | `false` | Hourly sweep of stored PDFs that no document references; logs each removal, ignores files younger than `UPLOAD_RECONCILE_GRACE_MINUTES` (60), and starts in `UPLOAD_RECONCILE_DRY_RUN=true` so it only logs until you set it to `false` |
 | `APP_PORT` | `8080` | Host port for the UI, e.g. `APP_PORT=3000 docker compose up -d` |
 
 Compose fills in the container-only values itself (`SPRING_PROFILES_ACTIVE=prod`,

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
@@ -21,7 +23,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class OrphanFileReconcilerTest {
 
     @Mock private DocumentRepository documentRepository;
@@ -36,6 +38,7 @@ class OrphanFileReconcilerTest {
         reconciler = new OrphanFileReconciler(documentRepository);
         ReflectionTestUtils.setField(reconciler, "uploadDir", uploadDir.toString());
         ReflectionTestUtils.setField(reconciler, "graceMinutes", 60L);
+        ReflectionTestUtils.setField(reconciler, "dryRun", false);
     }
 
     private Path write(String name, Instant modified) throws IOException {
@@ -62,6 +65,22 @@ class OrphanFileReconcilerTest {
         assertThat(referenced).exists();
         assertThat(inFlight).as("an upload may write its file before inserting the row").exists();
         assertThat(notStoredByUs).as("a PDF this app did not write").exists();
+    }
+
+    @Test
+    void dryRunLogsTheFutureRemovalAndKeepsTheFile(CapturedOutput output) throws IOException {
+        ReflectionTestUtils.setField(reconciler, "dryRun", true);
+        String orphanName = UUID.randomUUID() + ".pdf";
+        Path orphan = write(orphanName, Instant.now().minus(2, ChronoUnit.HOURS));
+        when(documentRepository.findAllStoredFilenames()).thenReturn(List.of());
+
+        reconciler.reconcile();
+
+        assertThat(orphan).exists();
+        assertThat(output)
+            .contains("Dry run: would remove orphaned upload")
+            .contains(orphanName)
+            .contains("Would remove 1 orphaned upload(s)");
     }
 
     @Test
