@@ -22,6 +22,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { UploadDropzone } from '@/components/UploadDropzone';
 import { ProcessingStepper } from '@/components/ProcessingStepper';
 import { PdfUnavailableBadge } from '@/components/PdfUnavailableBadge';
+import { LibraryEntitiesTab } from './LibraryEntitiesTab';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/hooks/useToast';
@@ -51,6 +52,7 @@ export function DocumentsPage() {
   const [collectionFilter, setCollectionFilter] = useState('');
   const [sort, setSort] = useState('date,desc');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [tab, setTab] = useState<'documents' | 'entities'>('documents');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
   const [addToCollectionOpen, setAddToCollectionOpen] = useState(false);
@@ -239,6 +241,34 @@ export function DocumentsPage() {
         </div>
       </div>
 
+      {/* Two views of the same library: files, and the entities inside them. */}
+      <div className="flex items-center gap-1 border-b" role="tablist" aria-label="Library views">
+        {([
+          { value: 'documents', label: 'Documents' },
+          { value: 'entities', label: 'Entities' },
+        ] as const).map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.value}
+            onClick={() => setTab(item.value)}
+            className={cn(
+              '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              tab === item.value
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'entities' ? (
+        <LibraryEntitiesTab />
+      ) : (
+        <>
       {/* One shared upload surface (also used on Home and Ask) */}
       <UploadDropzone />
 
@@ -439,6 +469,8 @@ export function DocumentsPage() {
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
+      )}
+        </>
       )}
 
       {/* Delete confirmation */}

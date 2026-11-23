@@ -201,7 +201,7 @@ Semantics:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/knowledge-graph/entities` | Merged entity index: one row per normalized name with the documents that mention it. Filters: `documentId`, `type`, `q`, `limit` (1–200, default 50) |
+| GET | `/knowledge-graph/entities` | Merged entity index: one row per normalized name with the documents that mention it. Filters: `documentId`, `type`, `types` (comma-separated), `q`, `limit` (1–200, default 50). Bare years, two-letter acronyms and table labels are hidden unless `includeNoise=true` |
 | GET | `/knowledge-graph/connections` | Document pairs that mention the same entities (`limit` 1–50, default 12) |
 
 ```jsonc

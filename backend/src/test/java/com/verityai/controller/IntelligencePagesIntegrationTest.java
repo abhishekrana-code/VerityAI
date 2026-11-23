@@ -319,6 +319,56 @@ class IntelligencePagesIntegrationTest {
             .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void entityIndexHidesNoiseAndAcceptsSeveralTypes() throws Exception {
+        String email = uniqueEmail();
+        Cookie session = register(email);
+
+        Document document = document(user(email), "noise-gate.pdf");
+        chunk(document, 0, 1,
+            "Alpha Corp reported revenue growth of 42% in 2024. "
+                + "Beta Systems reviewed the details in Berlin.");
+        assertThat(knowledgeGraphService.rebuild(document.getId())).isTrue();
+
+        // A bare year is extracted but says nothing about the subject.
+        MvcResult hidden = mockMvc.perform(get("/api/v1/knowledge-graph/entities")
+                .cookie(session)
+                .param("documentId", document.getId().toString()))
+            .andExpect(status().isOk())
+            .andReturn();
+        assertThat(entityNames(objectMapper.readTree(hidden.getResponse().getContentAsString())))
+            .contains("Alpha Corp", "Beta Systems")
+            .doesNotContain("2024");
+
+        // includeNoise returns the raw index.
+        MvcResult raw = mockMvc.perform(get("/api/v1/knowledge-graph/entities")
+                .cookie(session)
+                .param("documentId", document.getId().toString())
+                .param("includeNoise", "true"))
+            .andExpect(status().isOk())
+            .andReturn();
+        assertThat(entityNames(objectMapper.readTree(raw.getResponse().getContentAsString())))
+            .contains("2024");
+
+        // A comma-separated filter is what the default subject view uses.
+        MvcResult subjects = mockMvc.perform(get("/api/v1/knowledge-graph/entities")
+                .cookie(session)
+                .param("documentId", document.getId().toString())
+                .param("types", "PERSON,ORGANIZATION,LOCATION"))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode subjectIndex = objectMapper.readTree(subjects.getResponse().getContentAsString());
+        assertThat(subjectIndex.get("entities").size()).isGreaterThan(0);
+        subjectIndex.get("entities").forEach(item ->
+            assertThat(item.get("type").asText()).isIn("PERSON", "ORGANIZATION", "LOCATION"));
+    }
+
+    private static List<String> entityNames(JsonNode index) {
+        List<String> names = new java.util.ArrayList<>();
+        index.get("entities").forEach(item -> names.add(item.get("name").asText()));
+        return names;
+    }
+
     // ------------------------------------------------------------------
     // Verification index
     // ------------------------------------------------------------------

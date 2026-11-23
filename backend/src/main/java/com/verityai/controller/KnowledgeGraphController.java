@@ -32,15 +32,22 @@ public class KnowledgeGraphController {
      * Merged entity index: one row per normalized name, with every document that
      * mentions it. This is the readable replacement for repeating an entity once
      * per document in the canvas.
+     *
+     * <p>Noise rows (bare years, two-letter acronyms and table labels) are
+     * hidden by default; {@code includeNoise=true} returns the raw index. Use
+     * {@code types} for a multi-type filter such as the default subject view.</p>
      */
     @GetMapping("/entities")
     public ResponseEntity<KnowledgeEntityIndexResponse> entities(
             @CurrentUser User user,
             @RequestParam(required = false) UUID documentId,
             @RequestParam(required = false) String type,
+            @RequestParam(required = false) String types,
             @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "false") boolean includeNoise,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
-        return ResponseEntity.ok(knowledgeGraphService.entityIndex(user, documentId, type, q, limit));
+        return ResponseEntity.ok(
+            knowledgeGraphService.entityIndex(user, documentId, type, types, q, includeNoise, limit));
     }
 
     /** Document pairs that mention the same entities (doc-document connections). */

@@ -300,7 +300,8 @@ public class KnowledgeGraphService {
      * mentioned in three documents is one entry with three document references.
      */
     public KnowledgeEntityIndexResponse entityIndex(User user, UUID documentId, String type,
-                                                    String q, int limit) {
+                                                    String types, String q, boolean includeNoise,
+                                                    int limit) {
         return transactionTemplate.execute(status -> {
             if (documentId != null) {
                 documentRepository.findByIdAndUserIdAndDeletedAtIsNull(documentId, user.getId())
@@ -310,12 +311,21 @@ public class KnowledgeGraphService {
             // Rows are per document, so fetch more rows than output entries to
             // fill the limit with merged entries rather than one per mention site.
             int rowLimit = Math.min(Math.max(effectiveLimit * 5, 100), 2000);
-            EntityType entityType = parseType(type);
+            List<EntityType> entityTypes = parseTypes(type, types);
 
-            List<KnowledgeEntity> rows = entityRepository.findAll(
-                entitySpecification(user.getId(), documentId, entityType, q),
+            List<KnowledgeEntity> scanned = entityRepository.findAll(
+                entitySpecification(user.getId(), documentId, entityTypes, q),
                 PageRequest.of(0, rowLimit, Sort.by(Sort.Direction.DESC, "mentionCount")
                     .and(Sort.by(Sort.Direction.ASC, "name")))).getContent();
+
+            // Years, two-letter codes and table labels ("details", "code") are
+            // extracted as entities but say nothing about a document's subject.
+            // They are hidden by default; includeNoise restores the raw index.
+            List<KnowledgeEntity> rows = includeNoise
+                ? scanned
+                : scanned.stream()
+                    .filter(entity -> !EntityNoiseFilter.isNoise(entity.getName(), entity.getEntityType()))
+                    .toList();
 
             Map<String, List<KnowledgeEntity>> grouped = new LinkedHashMap<>();
             for (KnowledgeEntity entity : rows) {
@@ -330,14 +340,17 @@ public class KnowledgeGraphService {
                 .reversed()
                 .thenComparing(KnowledgeEntityIndexResponse.Item::getName, String.CASE_INSENSITIVE_ORDER));
 
-            boolean truncated = rows.size() >= rowLimit || items.size() > effectiveLimit;
+            boolean truncated = scanned.size() >= rowLimit || items.size() > effectiveLimit;
             if (items.size() > effectiveLimit) {
                 items = new ArrayList<>(items.subList(0, effectiveLimit));
             }
 
-            boolean unfiltered = documentId == null && entityType == null && (q == null || q.isBlank());
+            boolean unfiltered = documentId == null && entityTypes.isEmpty() && (q == null || q.isBlank());
             KnowledgeEntityIndexResponse response = new KnowledgeEntityIndexResponse();
-            response.setTotalEntities(unfiltered
+            // The exact distinct-name count includes noise rows; once noise is
+            // hidden the count comes from the scanned window, which is what the
+            // caller can actually see.
+            response.setTotalEntities(unfiltered && includeNoise
                 ? entityRepository.countDistinctNamesByUserId(user.getId())
                 : grouped.size());
             response.setReturnedEntities(items.size());
@@ -469,7 +482,7 @@ public class KnowledgeGraphService {
     }
 
     private Specification<KnowledgeEntity> entitySpecification(UUID userId, UUID documentId,
-                                                               EntityType type, String q) {
+                                                               List<EntityType> types, String q) {
         return (root, query, cb) -> {
             if (query != null && !Long.class.equals(query.getResultType())) {
                 root.fetch("document", JoinType.LEFT);
@@ -479,8 +492,10 @@ public class KnowledgeGraphService {
             if (documentId != null) {
                 predicates.add(cb.equal(root.get("document").get("id"), documentId));
             }
-            if (type != null) {
-                predicates.add(cb.equal(root.get("entityType"), type));
+            if (types.size() == 1) {
+                predicates.add(cb.equal(root.get("entityType"), types.get(0)));
+            } else if (!types.isEmpty()) {
+                predicates.add(root.get("entityType").in(types));
             }
             if (q != null && !q.isBlank()) {
                 String like = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
@@ -488,6 +503,22 @@ public class KnowledgeGraphService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /** Accepts `type=ORGANIZATION` and `types=PERSON,ORGANIZATION` alike. */
+    private static List<EntityType> parseTypes(String type, String types) {
+        Set<EntityType> parsed = new LinkedHashSet<>();
+        if (type != null && !type.isBlank()) {
+            parsed.add(parseType(type));
+        }
+        if (types != null && !types.isBlank()) {
+            for (String value : types.split(",")) {
+                if (!value.isBlank()) {
+                    parsed.add(parseType(value));
+                }
+            }
+        }
+        return new ArrayList<>(parsed);
     }
 
     private static EntityType parseType(String value) {

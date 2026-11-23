@@ -13,7 +13,10 @@ import java.util.UUID;
 @Data
 public class KnowledgeEntityIndexResponse {
 
-    /** Distinct entity names in this scope before the requested limit. */
+    /**
+     * Distinct names in this scope before the requested limit. When noise rows
+     * are hidden this counts the names observed in the scanned window.
+     */
     private long totalEntities;
 
     /** Number of merged entries in this response. */
