@@ -15,6 +15,7 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -27,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -156,7 +158,10 @@ public class DocumentService {
             document.setSha256(sha256);
             document.setStatus(Document.DocumentStatus.UPLOADED);
 
-            document = documentRepository.save(document);
+            // Flush here so a foreign-key failure (the account was deleted
+            // while this upload was in flight) surfaces in this method, where it
+            // can be explained, instead of at commit as a generic 500.
+            document = documentRepository.saveAndFlush(document);
             processingEventService.recordUploaded(document.getId());
 
             // Process asynchronously after the transaction commits
@@ -164,12 +169,27 @@ public class DocumentService {
             runAfterCommit(savedDocument.getId(), () -> processDocument(savedDocument.getId(), filePath));
 
             return document;
+        } catch (DataIntegrityViolationException e) {
+            deleteFileQuietly(filePath);
+            if (isMissingAccount(e)) {
+                throw ApiException.conflict("This account no longer exists. Sign in again.");
+            }
+            throw e;
         } catch (RuntimeException e) {
             // Covers callers without an active transaction, where afterCompletion
             // never runs; deleteIfExists makes a second cleanup harmless.
             deleteFileQuietly(filePath);
             throw e;
         }
+    }
+
+    /**
+     * A 23503 foreign-key violation on this insert means the account was deleted
+     * while the upload was in flight (documents.user_id is the only FK it writes).
+     */
+    private static boolean isMissingAccount(DataIntegrityViolationException e) {
+        return e.getMostSpecificCause() instanceof SQLException sql
+            && "23503".equals(sql.getSQLState());
     }
 
     /** Deletes the stored upload unless the current transaction commits. */

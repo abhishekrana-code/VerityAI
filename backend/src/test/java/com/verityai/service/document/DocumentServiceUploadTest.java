@@ -1,6 +1,7 @@
 package com.verityai.service.document;
 
 import com.verityai.config.ProcessingConfig;
+import com.verityai.exception.ApiException;
 import com.verityai.repository.DocumentChunkRepository;
 import com.verityai.repository.DocumentRepository;
 import com.verityai.service.contradiction.ContradictionService;
@@ -19,6 +20,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.sql.SQLException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
@@ -76,7 +78,7 @@ class DocumentServiceUploadTest {
         when(processingExecutor.hasCapacity()).thenReturn(true);
         when(documentRepository.findByUserIdAndSha256AndDeletedAtIsNull(eq(userId), anyString()))
             .thenReturn(Optional.empty());
-        when(documentRepository.save(any()))
+        when(documentRepository.saveAndFlush(any()))
             .thenThrow(new DataIntegrityViolationException("duplicate key"));
 
         assertThatThrownBy(() -> documentService.upload(userId, file))
@@ -84,6 +86,31 @@ class DocumentServiceUploadTest {
 
         try (Stream<Path> remaining = Files.list(uploadDir)) {
             assertThat(remaining.toList()).as("stored PDF after a failed save").isEmpty();
+        }
+    }
+
+    @Test
+    void upload_whenTheAccountWasDeletedMidUpload_returnsAConflict() throws IOException {
+        UUID userId = UUID.randomUUID();
+        MockMultipartFile file = new MockMultipartFile(
+            "file", "report.pdf", "application/pdf",
+            "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n".getBytes());
+
+        when(processingExecutor.hasCapacity()).thenReturn(true);
+        when(documentRepository.findByUserIdAndSha256AndDeletedAtIsNull(eq(userId), anyString()))
+            .thenReturn(Optional.empty());
+        when(documentRepository.saveAndFlush(any()))
+            .thenThrow(new DataIntegrityViolationException("insert failed",
+                new SQLException("violates foreign key constraint \"documents_user_id_fkey\"", "23503")));
+
+        assertThatThrownBy(() -> documentService.upload(userId, file))
+            .isInstanceOfSatisfying(ApiException.class, e -> {
+                assertThat(e.getStatus()).isEqualTo(409);
+                assertThat(e.getMessage()).contains("account no longer exists");
+            });
+
+        try (Stream<Path> remaining = Files.list(uploadDir)) {
+            assertThat(remaining.toList()).as("stored PDF after a lost race").isEmpty();
         }
     }
 }
