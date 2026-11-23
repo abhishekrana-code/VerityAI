@@ -59,11 +59,11 @@ services:
       # Distinct name so a host-oriented value in .env does not weaken it.
       TRUSTED_PROXY_PATTERN: '${COMPOSE_TRUSTED_PROXY_PATTERN:-127\.0\.0\.1|0:0:0:0:0:0:0:1|::1|172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+|10\.\d+\.\d+\.\d+}'
       UPLOAD_DIR: /var/lib/verityai/uploads
-      # Sweep stored PDFs with no document row. Dry run for now: it only logs
-      # what it would remove. Set UPLOAD_RECONCILE_DRY_RUN to false once the
-      # log looks right.
+      # Sweep stored PDFs with no document row, hourly, skipping files younger
+      # than the grace period. Live: the dry run matched the expected orphans
+      # before this was switched on.
       UPLOAD_RECONCILE_ENABLED: 'true'
-      UPLOAD_RECONCILE_DRY_RUN: 'true'
+      UPLOAD_RECONCILE_DRY_RUN: 'false'
       EMBEDDINGS_CACHE_DIR: /var/lib/verityai/models
       EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-onnx}
     volumes:
