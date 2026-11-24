@@ -172,6 +172,28 @@ Troubleshooting:
 - **Slow first run** — Maven compiles the backend before Spring Boot starts;
   the Playwright startup timeout is 10 minutes.
 
+## Local test-residue cleanup
+
+Verification runs and both E2E suites register throwaway accounts against the
+local stack (`e2e@verityai.test`, `docker@verityai.test`,
+`intel-live-<hex>@example.com`, …). They stay in the database and their uploads
+stay on the uploads volume after the rows are deleted by hand.
+`scripts/purge-test-accounts.sh` removes them. It is a dry run unless told
+otherwise, so the safe form needs no flags:
+
+```bash
+./scripts/purge-test-accounts.sh                          # list matches, change nothing
+./scripts/purge-test-accounts.sh --apply                  # delete the accounts
+./scripts/purge-test-accounts.sh --apply --purge-files    # ...and their PDFs
+```
+
+It matches only two families: `*@verityai.test` (reserved test domain) and the
+generated `<prefix>-<8 hex>@example.com` names, so a real address is never
+caught by a prefix alone. The stack must be running; `DB_CONTAINER`,
+`APP_CONTAINER` and `UPLOAD_DIR` override the container names and the
+in-container upload path. Without `--purge-files` the files are left to the
+hourly `OrphanFileReconciler` sweep, which is enabled in `docker-compose.yml`.
+
 ## CI
 
 `.github/workflows/ci.yml` runs three jobs on every push and pull request:
