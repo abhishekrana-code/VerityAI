@@ -87,9 +87,8 @@ export function useDeleteAccount() {
   return useMutation<void, ApiException, { password: string }>({
     mutationFn: ({ password }) => api.delete<void>('/users/me', { password }),
     onSuccess: () => {
-      // The account and its session are gone server-side; drop the cached
-      // principal so nothing in this tab still believes it is signed in.
-      queryClient.setQueryData(['auth', 'me'], { user: null, authenticated: false });
+      // The account and its session are gone server-side; drop every cached
+      // query so nothing in this tab still believes it is signed in.
       queryClient.clear();
     },
   });

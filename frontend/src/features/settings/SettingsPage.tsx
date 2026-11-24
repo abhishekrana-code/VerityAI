@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, useUpdateProfile, useChangePassword, useDeleteAccount } from '@/hooks/useAuth';
 import { Loader2, User as UserIcon, Lock, Palette, Save, Sun, Moon, Monitor, Trash2 } from 'lucide-react';
-import { ApiException } from '@/lib/api';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
@@ -33,7 +32,6 @@ type PasswordForm = z.infer<typeof passwordSchema>;
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { data: auth } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'preferences' | 'data'>('profile');
@@ -41,10 +39,6 @@ export function SettingsPage() {
 
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
-  const deleteAccount = useDeleteAccount();
-  const [deletePassword, setDeletePassword] = useState('');
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -237,90 +231,99 @@ export function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'data' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="font-medium mb-1">Delete my account and data</h3>
-                <p className="text-sm text-muted-foreground">
-                  This permanently deletes your account, your documents and their stored PDFs,
-                  conversations, citations, checks and entity data. It cannot be undone.
-                </p>
-              </div>
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                <label htmlFor="deleteAccountPassword" className="block text-sm font-medium mb-2">
-                  Confirm your password
-                </label>
-                <input
-                  id="deleteAccountPassword"
-                  type="password"
-                  autoComplete="current-password"
-                  value={deletePassword}
-                  onChange={(event) => {
-                    setDeletePassword(event.target.value);
-                    setDeleteError(null);
-                  }}
-                  className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                {deleteError && (
-                  <p role="alert" className="mt-2 text-sm text-destructive">{deleteError}</p>
-                )}
-                <div className="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    disabled={deleteAccount.isPending}
-                    onClick={() => {
-                      if (!deletePassword) {
-                        setDeleteError('Enter your password to continue.');
-                        return;
-                      }
-                      setConfirmDeleteOpen(true);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-                  >
-                    {deleteAccount.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                    Delete my account
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'data' && <DeleteAccountPanel />}
         </div>
       </div>
-
-      <ConfirmDialog
-        open={confirmDeleteOpen}
-        title="Delete this account permanently?"
-        description="Your documents, stored PDFs, conversations and check results are deleted immediately. There is no undo."
-        confirmLabel="Delete account"
-        loading={deleteAccount.isPending}
-        onCancel={() => setConfirmDeleteOpen(false)}
-        onConfirm={() => {
-          setDeleteError(null);
-          deleteAccount.mutate({ password: deletePassword }, {
-            onSuccess: () => {
-              setConfirmDeleteOpen(false);
-              setDeletePassword('');
-              navigate('/login', { replace: true });
-            },
-            onError: (error) => {
-              setConfirmDeleteOpen(false);
-              setDeleteError(
-                error instanceof ApiException && error.message
-                  ? error.message
-                  : 'Could not delete your account. Try again.',
-              );
-            },
-          });
-        }}
-      />
 
       <ToastProvider>
         <ToastViewport />
       </ToastProvider>
+    </div>
+  );
+}
+
+/**
+ * Destructive block for the Data tab. It owns its password, error and
+ * confirmation state so no other settings form can submit it, and it is the
+ * only place that navigates away from Settings.
+ */
+function DeleteAccountPanel() {
+  const navigate = useNavigate();
+  const deleteAccount = useDeleteAccount();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-medium mb-1">Delete my account and data</h3>
+        <p className="text-sm text-muted-foreground">
+          This permanently deletes your account, your documents and their stored PDFs,
+          conversations, citations, checks and entity data. It cannot be undone.
+        </p>
+      </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!password) {
+            setError('Enter your password to continue.');
+            return;
+          }
+          setError(null);
+          setConfirming(true);
+        }}
+        className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+      >
+        <label htmlFor="deleteAccountPassword" className="block text-sm font-medium mb-2">
+          Confirm your password
+        </label>
+        <input
+          id="deleteAccountPassword"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setError(null);
+          }}
+          className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
+        <div className="mt-4 flex justify-end">
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete my account
+          </button>
+        </div>
+      </form>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Delete this account permanently?"
+        description="Your documents, stored PDFs, conversations and check results are deleted immediately. There is no undo."
+        confirmLabel="Delete account"
+        loading={deleteAccount.isPending}
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          deleteAccount.mutate(
+            { password },
+            {
+              // Success unmounts this page, so only the failure path needs to
+              // restore the form.
+              onSuccess: () => navigate('/login', { replace: true }),
+              onError: (mutationError) => {
+                setConfirming(false);
+                setError(mutationError.message || 'Could not delete your account. Try again.');
+              },
+            },
+          );
+        }}
+      />
     </div>
   );
 }
