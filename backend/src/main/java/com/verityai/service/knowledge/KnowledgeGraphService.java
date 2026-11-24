@@ -360,7 +360,10 @@ public class KnowledgeGraphService {
         });
     }
 
-    /** Document pairs that mention the same entity names. */
+    /**
+     * Document pairs that mention the same entity names, ranked by the IDF
+     * weight of those names so a rare shared subject outranks a common one.
+     */
     public KnowledgeConnectionsResponse connections(User user, int limit) {
         return transactionTemplate.execute(status -> {
             int pairLimit = Math.min(Math.max(limit, 1), 50);
@@ -390,8 +393,13 @@ public class KnowledgeGraphService {
                 displayNames.putIfAbsent(entity.getNormalizedName(), entity.getName());
             }
 
+            int documentCount = documentNames.size();
             Map<String, KnowledgeConnectionsResponse.Connection> pairs = new LinkedHashMap<>();
+            Map<String, Double> weights = new HashMap<>();
             for (Map.Entry<String, Set<UUID>> entry : documentsByName.entrySet()) {
+                // A name in every document says nothing about a pair; a name only
+                // these two documents share is strong evidence they are related.
+                double idf = idfWeight(documentCount, entry.getValue().size());
                 List<UUID> ids = new ArrayList<>(entry.getValue());
                 for (int i = 0; i < ids.size(); i++) {
                     for (int j = i + 1; j < ids.size(); j++) {
@@ -419,6 +427,7 @@ public class KnowledgeGraphService {
                             pairs.put(key, connection);
                         }
                         connection.setSharedEntities(connection.getSharedEntities() + 1);
+                        weights.merge(key, idf, Double::sum);
                         if (connection.getSampleEntities().size() < 5) {
                             connection.getSampleEntities().add(displayNames.get(entry.getKey()));
                         }
@@ -428,7 +437,10 @@ public class KnowledgeGraphService {
 
             List<KnowledgeConnectionsResponse.Connection> sorted = new ArrayList<>(pairs.values());
             sorted.sort(Comparator
-                .comparingInt(KnowledgeConnectionsResponse.Connection::getSharedEntities).reversed()
+                .comparingDouble((KnowledgeConnectionsResponse.Connection connection) ->
+                    weights.getOrDefault(weightKey(connection), 0.0)).reversed()
+                .thenComparing(Comparator.comparingInt(
+                    KnowledgeConnectionsResponse.Connection::getSharedEntities).reversed())
                 .thenComparing(KnowledgeConnectionsResponse.Connection::getDocumentAName,
                     Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
             boolean truncated = rows.size() >= rowLimit || sorted.size() > pairLimit;
@@ -441,6 +453,20 @@ public class KnowledgeGraphService {
                 ? new ArrayList<>(sorted.subList(0, pairLimit)) : sorted);
             return response;
         });
+    }
+
+    /**
+     * Smoothed inverse document frequency of a shared name: zero when every
+     * document mentions it, largest when only the pair does. The +1 on both
+     * sides keeps the ratio defined when the library is small.
+     */
+    private static double idfWeight(int documentCount, int documentFrequency) {
+        return Math.log((documentCount + 1.0) / (documentFrequency + 1.0));
+    }
+
+    /** The pair key a ranked connection was accumulated under. */
+    private static String weightKey(KnowledgeConnectionsResponse.Connection connection) {
+        return connection.getDocumentAId() + "|" + connection.getDocumentBId();
     }
 
     private KnowledgeEntityIndexResponse.Item toIndexItem(List<KnowledgeEntity> group) {

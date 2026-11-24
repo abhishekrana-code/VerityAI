@@ -367,6 +367,61 @@ class IntelligencePagesIntegrationTest {
             assertThat(item.get("type").asText()).isIn("PERSON", "ORGANIZATION", "LOCATION"));
     }
 
+    @Test
+    void connectionsRankRareSharedNamesAboveCommonOnes() throws Exception {
+        String email = uniqueEmail();
+        Cookie session = register(email);
+        User owner = user(email);
+
+        // "Berlin" is in three documents, so it says little about any one pair.
+        // "Halcyon Labs" is in only two, so that pair is the real connection.
+        Document first = document(owner, "a-first.pdf");
+        chunk(first, 0, 1, "Berlin hosted the planning meeting.");
+        Document second = document(owner, "b-second.pdf");
+        chunk(second, 0, 1, "Berlin reported record attendance.");
+        Document third = document(owner, "c-third.pdf");
+        chunk(third, 0, 1, "Berlin announced new funding.");
+        Document rareA = document(owner, "s-rare-a.pdf");
+        chunk(rareA, 0, 1, "Halcyon Labs shipped the prototype.");
+        Document rareB = document(owner, "t-rare-b.pdf");
+        chunk(rareB, 0, 1, "Halcyon Labs signed the lease.");
+        for (Document document : List.of(first, second, third, rareA, rareB)) {
+            assertThat(knowledgeGraphService.rebuild(document.getId())).isTrue();
+        }
+
+        MvcResult result = mockMvc.perform(get("/api/v1/knowledge-graph/connections")
+                .cookie(session)
+                .param("limit", "10"))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode connections = objectMapper.readTree(result.getResponse().getContentAsString())
+            .get("connections");
+
+        JsonNode rare = findConnection(connections, "s-rare-a.pdf", "t-rare-b.pdf");
+        JsonNode common = findConnection(connections, "a-first.pdf", "b-second.pdf");
+        assertThat(rare).as("Halcyon Labs pair").isNotNull();
+        assertThat(common).as("Berlin pair").isNotNull();
+        // Both share exactly one name, so only the IDF weight separates them.
+        assertThat(rare.get("sharedEntities").asInt()).isEqualTo(1);
+        assertThat(common.get("sharedEntities").asInt()).isEqualTo(1);
+
+        List<String> top = new java.util.ArrayList<>();
+        top.add(connections.get(0).get("documentAName").asText());
+        top.add(connections.get(0).get("documentBName").asText());
+        assertThat(top).containsExactlyInAnyOrder("s-rare-a.pdf", "t-rare-b.pdf");
+    }
+
+    private static JsonNode findConnection(JsonNode connections, String a, String b) {
+        for (JsonNode item : connections) {
+            String nameA = item.get("documentAName").asText();
+            String nameB = item.get("documentBName").asText();
+            if ((a.equals(nameA) && b.equals(nameB)) || (a.equals(nameB) && b.equals(nameA))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
     private static List<String> entityNames(JsonNode index) {
         List<String> names = new java.util.ArrayList<>();
         index.get("entities").forEach(item -> names.add(item.get("name").asText()));

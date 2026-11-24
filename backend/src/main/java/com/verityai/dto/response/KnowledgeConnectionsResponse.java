@@ -9,6 +9,10 @@ import java.util.UUID;
  * Document-to-document links derived from shared entity names. Two documents
  * are connected when they mention the same normalized entity; the pair carries
  * the number of shared names and a sample so the claim can be checked.
+ *
+ * <p>Connections are ordered by the inverse-document-frequency weight of the
+ * shared names; {@code sharedEntities} only breaks ties, so a name only the
+ * pair shares outranks one present throughout the library.</p>
  */
 @Data
 public class KnowledgeConnectionsResponse {

@@ -202,7 +202,7 @@ Semantics:
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/knowledge-graph/entities` | Merged entity index: one row per normalized name with the documents that mention it. Filters: `documentId`, `type`, `types` (comma-separated), `q`, `limit` (1–200, default 50). Bare years, two-letter acronyms and table labels are hidden unless `includeNoise=true` |
-| GET | `/knowledge-graph/connections` | Document pairs that mention the same entities (`limit` 1–50, default 12) |
+| GET | `/knowledge-graph/connections` | Document pairs that mention the same entities, ranked by IDF weight (`limit` 1–50, default 12) |
 
 ```jsonc
 // GET /knowledge-graph/entities?documentId=…
@@ -217,6 +217,8 @@ Semantics:
 }
 
 // GET /knowledge-graph/connections
+// connections are ordered by the IDF weight of the shared names, with the
+// raw shared count as the first tie-break.
 {
   "documentCount": 3, "pairCount": 2, "truncated": false,
   "connections": [{
@@ -238,6 +240,12 @@ Semantics:
   is made to build the index.
 - **Connections are about subjects, not dates.** A bare year, a two-letter
   acronym or a generic label (“details”, “customer”) never creates a pair.
+- **Ranking is IDF-weighted.** Each shared name is weighted by
+  `ln((N + 1) / (df + 1))`, where `N` is the number of documents in the
+  scanned library and `df` the number of documents mentioning that name; a
+  pair's weight is the sum over its shared names. A name present in every
+  document therefore contributes nothing, a rare subject decides the order,
+  and pairs that tie fall back to `sharedEntities`, which stays the raw count.
 - Extraction is bounded (150 entities per document) and runs when a document
   becomes READY, plus a bounded asynchronous startup backfill.
 - All reads are ownership-scoped; a foreign `documentId` returns **404**.

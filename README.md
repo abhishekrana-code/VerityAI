@@ -182,7 +182,7 @@ verity-ai/
 - **Hybrid semantic search** (Phase 2) — Local ONNX embeddings + PostgreSQL pgvector fused with full-text search (RRF); degrades honestly to keyword-only when the model is unavailable
 - **Multi-document research chat** (Phase 2) — Ask across several PDFs at once; sources are compared explicitly and cited per claim; context documents can be added/removed at any time
 - **Claim verification** (Phase 2) — Deterministic citation coverage + AI grounding classes (Supported / Partially supported / Unsupported / Conflicting) with clickable page-level citation jumps into the PDF
-- **Entities and related documents** (Phase 3) — Deterministic entity extraction with evidence excerpts on each document page, plus IDF-style document connections from shared entities (years and two-letter codes ignored)
+- **Entities and related documents** (Phase 3) — Deterministic entity extraction with evidence excerpts on each document page, plus IDF-weighted document connections from shared entities (a rare shared name outranks a common one; years and two-letter codes ignored)
 - **Checks page** (Phase 3) — Answers with their stored claim results and a **Needs attention** filter, plus a **Conflicts** tab (Beta). Summaries export as Markdown from the document page
 - **Contradiction detection** (Phase 3, Feature 8) — Compares bounded claim pairs that share a subject and reports only genuine conflicts in five classes (numeric, temporal, attribute, causal, polarity), each with both claims, documents and page citations plus a LOW/MEDIUM/HIGH impact rating
 - **Dedicated search page** — Hybrid retrieval UI with document scope, honest strategy/model badges and PDF page jumps
