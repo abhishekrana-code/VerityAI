@@ -32,7 +32,8 @@ const TYPE_LABELS: Record<KnowledgeEntityType, string> = {
 const SUBJECT_TYPES = 'PERSON,ORGANIZATION,LOCATION,PRODUCT,EVENT';
 
 const TYPE_OPTIONS = [
-  { value: 'subjects', label: 'People, places & organizations' },
+  // Covers SUBJECT_TYPES exactly: a product or an event is a subject too.
+  { value: 'subjects', label: 'People, places, products & events' },
   { value: 'all', label: 'All entity types' },
   { value: 'PERSON', label: 'People' },
   { value: 'ORGANIZATION', label: 'Organizations' },
@@ -40,7 +41,8 @@ const TYPE_OPTIONS = [
   { value: 'PRODUCT', label: 'Products' },
   { value: 'EVENT', label: 'Events' },
   { value: 'METRIC', label: 'Numbers' },
-  { value: 'DATE', label: 'Dates' },
+  // Bare years are hidden as noise, so only explicit dates surface here.
+  { value: 'DATE', label: 'Dates (bare years hidden)' },
   { value: 'CONCEPT', label: 'Topics' },
   { value: 'ACRONYM', label: 'Acronyms' },
 ] as const;
@@ -141,7 +143,7 @@ export function LibraryEntitiesTab() {
               {query
                 ? `No entity matches “${query}”.`
                 : typeFilter === 'subjects'
-                  ? 'No people, places or organizations found yet. They are extracted automatically once processing finishes.'
+                  ? 'No people, places, products or events found yet. They are extracted automatically once processing finishes.'
                   : 'No entities found yet. They are extracted automatically once processing finishes.'}
             </p>
             {!query && typeFilter === 'subjects' && (
