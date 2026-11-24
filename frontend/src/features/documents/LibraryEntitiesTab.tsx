@@ -209,8 +209,9 @@ export function LibraryEntitiesTab() {
       <section className="rounded-xl border p-5">
         <h3 className="font-semibold">Documents that share entities</h3>
         <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
-          Documents connected by the names they both mention, strongest first. Years and
-          two-letter codes are ignored, so this is about subjects rather than dates.
+          Documents connected by the names they both mention, strongest first. Weight counts how
+          specific the shared names are, so a rare name can outrank a larger raw count; years and
+          two-letter codes are ignored.
         </p>
         {connectionsQuery.isLoading ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -255,7 +256,7 @@ export function LibraryEntitiesTab() {
                   )}
                 </div>
                 <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                  {connection.sharedEntities} shared
+                  {connection.sharedEntities} shared · weight {connection.weight.toFixed(2)}
                 </span>
               </li>
             ))}

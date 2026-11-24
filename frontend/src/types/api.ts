@@ -381,6 +381,7 @@ export interface KnowledgeConnection {
   documentBId: string;
   documentBName: string;
   sharedEntities: number;
+  weight: number;
   sampleEntities: string[];
 }
 

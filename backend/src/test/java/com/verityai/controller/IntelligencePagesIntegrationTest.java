@@ -404,6 +404,8 @@ class IntelligencePagesIntegrationTest {
         // Both share exactly one name, so only the IDF weight separates them.
         assertThat(rare.get("sharedEntities").asInt()).isEqualTo(1);
         assertThat(common.get("sharedEntities").asInt()).isEqualTo(1);
+        // The weight the UI shows must agree with the order.
+        assertThat(rare.get("weight").asDouble()).isGreaterThan(common.get("weight").asDouble());
 
         List<String> top = new java.util.ArrayList<>();
         top.add(connections.get(0).get("documentAName").asText());

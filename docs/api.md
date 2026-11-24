@@ -224,7 +224,8 @@ Semantics:
   "connections": [{
     "documentAId": "…", "documentAName": "a.pdf",
     "documentBId": "…", "documentBName": "b.pdf",
-    "sharedEntities": 6, "sampleEntities": ["Alpha Corp", "Project Orion"]
+    "sharedEntities": 6, "weight": 4.16,
+    "sampleEntities": ["Alpha Corp", "Project Orion"]
   }]
 }
 ```
@@ -246,6 +247,7 @@ Semantics:
   pair's weight is the sum over its shared names. A name present in every
   document therefore contributes nothing, a rare subject decides the order,
   and pairs that tie fall back to `sharedEntities`, which stays the raw count.
+  Each connection returns that weight as `weight`.
 - Extraction is bounded (150 entities per document) and runs when a document
   becomes READY, plus a bounded asynchronous startup backfill.
 - All reads are ownership-scoped; a foreign `documentId` returns **404**.

@@ -395,7 +395,6 @@ public class KnowledgeGraphService {
 
             int documentCount = documentNames.size();
             Map<String, KnowledgeConnectionsResponse.Connection> pairs = new LinkedHashMap<>();
-            Map<String, Double> weights = new HashMap<>();
             for (Map.Entry<String, Set<UUID>> entry : documentsByName.entrySet()) {
                 // A name in every document says nothing about a pair; a name only
                 // these two documents share is strong evidence they are related.
@@ -427,7 +426,7 @@ public class KnowledgeGraphService {
                             pairs.put(key, connection);
                         }
                         connection.setSharedEntities(connection.getSharedEntities() + 1);
-                        weights.merge(key, idf, Double::sum);
+                        connection.setWeight(connection.getWeight() + idf);
                         if (connection.getSampleEntities().size() < 5) {
                             connection.getSampleEntities().add(displayNames.get(entry.getKey()));
                         }
@@ -437,8 +436,7 @@ public class KnowledgeGraphService {
 
             List<KnowledgeConnectionsResponse.Connection> sorted = new ArrayList<>(pairs.values());
             sorted.sort(Comparator
-                .comparingDouble((KnowledgeConnectionsResponse.Connection connection) ->
-                    weights.getOrDefault(weightKey(connection), 0.0)).reversed()
+                .comparingDouble(KnowledgeConnectionsResponse.Connection::getWeight).reversed()
                 .thenComparing(Comparator.comparingInt(
                     KnowledgeConnectionsResponse.Connection::getSharedEntities).reversed())
                 .thenComparing(KnowledgeConnectionsResponse.Connection::getDocumentAName,
@@ -462,11 +460,6 @@ public class KnowledgeGraphService {
      */
     private static double idfWeight(int documentCount, int documentFrequency) {
         return Math.log((documentCount + 1.0) / (documentFrequency + 1.0));
-    }
-
-    /** The pair key a ranked connection was accumulated under. */
-    private static String weightKey(KnowledgeConnectionsResponse.Connection connection) {
-        return connection.getDocumentAId() + "|" + connection.getDocumentBId();
     }
 
     private KnowledgeEntityIndexResponse.Item toIndexItem(List<KnowledgeEntity> group) {

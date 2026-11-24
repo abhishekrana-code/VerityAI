@@ -33,6 +33,8 @@ public class KnowledgeConnectionsResponse {
         private UUID documentBId;
         private String documentBName;
         private int sharedEntities;
+        /** Sum of the IDF weights of the shared names; the list is ordered by it. */
+        private double weight;
         private List<String> sampleEntities;
     }
 }
