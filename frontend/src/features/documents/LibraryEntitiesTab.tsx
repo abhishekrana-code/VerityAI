@@ -53,7 +53,6 @@ const TYPE_OPTIONS = [
  */
 export function LibraryEntitiesTab() {
   const [typeFilter, setTypeFilter] = useState<string>('subjects');
-  const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
 
   const entitiesQuery = useQuery({
@@ -100,40 +99,30 @@ export function LibraryEntitiesTab() {
                 </option>
               ))}
             </select>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                setQuery(queryInput.trim());
-              }}
-            >
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={queryInput}
-                  onChange={(event) => setQueryInput(event.target.value)}
-                  placeholder="Find an entity…"
-                  aria-label="Find an entity in the library"
-                  className="h-9 w-48 rounded-lg border border-border/70 bg-background/70 pl-8 pr-7 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
-                />
-                {queryInput && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQueryInput('');
-                      setQuery('');
-                    }}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                    aria-label="Clear entity search"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            </form>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Find an entity…"
+                aria-label="Find an entity in the library"
+                className="h-9 w-48 rounded-lg border border-border/70 bg-background/70 pl-8 pr-7 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Clear entity search"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -208,8 +197,8 @@ export function LibraryEntitiesTab() {
         )}
         {entitiesQuery.data && entities.length > 0 && (
           <p className="mt-2 text-[11px] text-muted-foreground">
-            {entitiesQuery.data.truncated
-              ? `Showing the ${entitiesQuery.data.returnedEntities} most-mentioned of ${entitiesQuery.data.totalEntities} names.`
+            {entitiesQuery.data.returnedEntities < entitiesQuery.data.totalEntities
+              ? `Showing the ${entitiesQuery.data.returnedEntities} most-mentioned of ${pluralize(entitiesQuery.data.totalEntities, 'name')}.`
               : `${pluralize(entitiesQuery.data.totalEntities, 'name')} in this view.`}
           </p>
         )}

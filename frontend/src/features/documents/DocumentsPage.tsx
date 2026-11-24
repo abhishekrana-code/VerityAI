@@ -269,207 +269,207 @@ export function DocumentsPage() {
         <LibraryEntitiesTab />
       ) : (
         <>
-      {/* One shared upload surface (also used on Home and Ask) */}
-      <UploadDropzone />
+          {/* One shared upload surface (also used on Home and Ask) */}
+          <UploadDropzone />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="Search documents..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            className="w-full pl-10 h-10 rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as typeof STATUS_OPTIONS[number]); setPage(0); }}
-          aria-label="Filter by status"
-          className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s === 'All' ? 'All statuses' : s}</option>)}
-        </select>
-        <select
-          value={tagFilter}
-          onChange={(e) => { setTagFilter(e.target.value); setPage(0); }}
-          aria-label="Filter by tag"
-          className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All tags</option>
-          {tags?.map((t) => (
-            <option key={t.id} value={t.id}>{t.name} ({t.documentCount})</option>
-          ))}
-        </select>
-        <select
-          value={collectionFilter}
-          onChange={(e) => { setCollectionFilter(e.target.value); setPage(0); }}
-          aria-label="Filter by collection"
-          className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All collections</option>
-          {collections?.map((c) => (
-            <option key={c.id} value={c.id}>{c.name} ({c.documentCount})</option>
-          ))}
-        </select>
-        <select
-          value={sort}
-          onChange={(e) => { setSort(e.target.value); setPage(0); }}
-          aria-label="Sort documents"
-          className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="inline-flex items-center gap-1.5 h-10 px-3 rounded-lg border border-border text-sm text-muted-foreground hover:bg-accent transition-colors"
-          >
-            <X className="h-3.5 w-3.5" /> Clear
-          </button>
-        )}
-      </div>
-
-      {/* Bulk selection bar */}
-      {selected.size > 0 && (
-        <div
-          className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3"
-          role="region"
-          aria-label="Bulk actions"
-        >
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={() => setAddToCollectionOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent transition-colors"
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="search"
+                placeholder="Search documents..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                className="w-full pl-10 h-10 rounded-lg border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as typeof STATUS_OPTIONS[number]); setPage(0); }}
+              aria-label="Filter by status"
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <FolderPlus className="h-4 w-4" /> Add to collection
-            </button>
-            <button
-              onClick={() => setConfirmDelete({
-                ids: Array.from(selected),
-                label: `${selected.size} document${selected.size > 1 ? 's' : ''}`,
-              })}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-destructive text-destructive-foreground px-3 py-1.5 text-sm font-medium hover:bg-destructive/90 transition-colors"
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s === 'All' ? 'All statuses' : s}</option>)}
+            </select>
+            <select
+              value={tagFilter}
+              onChange={(e) => { setTagFilter(e.target.value); setPage(0); }}
+              aria-label="Filter by tag"
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Trash2 className="h-4 w-4" /> Delete
-            </button>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              <option value="">All tags</option>
+              {tags?.map((t) => (
+                <option key={t.id} value={t.id}>{t.name} ({t.documentCount})</option>
+              ))}
+            </select>
+            <select
+              value={collectionFilter}
+              onChange={(e) => { setCollectionFilter(e.target.value); setPage(0); }}
+              aria-label="Filter by collection"
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Clear selection
-            </button>
+              <option value="">All collections</option>
+              {collections?.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} ({c.documentCount})</option>
+              ))}
+            </select>
+            <select
+              value={sort}
+              onChange={(e) => { setSort(e.target.value); setPage(0); }}
+              aria-label="Sort documents"
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {hasFilters && (
+              <button
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1.5 h-10 px-3 rounded-lg border border-border text-sm text-muted-foreground hover:bg-accent transition-colors"
+              >
+                <X className="h-3.5 w-3.5" /> Clear
+              </button>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* Select-all row (when there are documents) */}
-      {docs.length > 0 && (
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer w-fit">
-          <input
-            type="checkbox"
-            checked={allPageSelected}
-            ref={(el) => { if (el) el.indeterminate = !allPageSelected && somePageSelected; }}
-            onChange={toggleSelectPage}
-            className="h-4 w-4 rounded border-input accent-primary"
-          />
-          Select all on this page
-        </label>
-      )}
-
-      {/* Document list / grid */}
-      {isLoading ? (
-        <div className={cn(
-          view === 'grid' ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'space-y-3'
-        )}>
-          {[...Array(8)].map((_, i) => (
-            <DocumentSkeleton key={i} view={view} />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="rounded-xl border border-destructive/30 p-8 text-center">
-          <AlertCircle className="h-10 w-10 mx-auto text-destructive/60 mb-3" />
-          <p className="text-destructive font-medium">Failed to load documents</p>
-          <p className="text-sm text-muted-foreground mt-1 mb-4">Check your connection and try again.</p>
-          <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['documents'] })}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      ) : !data || docs.length === 0 ? (
-        hasFilters ? (
-          <div className="rounded-xl border border-dashed p-12 text-center">
-            <Search className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No documents match your filters</h3>
-            <p className="text-muted-foreground mb-4">Try a different search term or clear the filters.</p>
-            <button
-              onClick={clearFilters}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+          {/* Bulk selection bar */}
+          {selected.size > 0 && (
+            <div
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3"
+              role="region"
+              aria-label="Bulk actions"
             >
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed p-12 text-center">
-            <FileText className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
-            <p className="text-muted-foreground">Drop a PDF above, or click the upload area to choose a file.</p>
-          </div>
-        )
-      ) : view === 'grid' ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {docs.map((doc) => (
-            <DocumentCard
-              key={doc.id}
-              doc={doc}
-              selected={selected.has(doc.id)}
-              onToggle={() => toggleSelected(doc.id)}
-              onRetry={() => retryMutation.mutate(doc.id)}
-              onDelete={() => setConfirmDelete({ ids: [doc.id], label: `"${doc.originalFilename}"` })}
-              onAsk={() => askAboutMutation.mutate(doc)}
+              <span className="text-sm font-medium">{selected.size} selected</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => setAddToCollectionOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-accent transition-colors"
+                >
+                  <FolderPlus className="h-4 w-4" /> Add to collection
+                </button>
+                <button
+                  onClick={() => setConfirmDelete({
+                    ids: Array.from(selected),
+                    label: `${selected.size} document${selected.size > 1 ? 's' : ''}`,
+                  })}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-destructive text-destructive-foreground px-3 py-1.5 text-sm font-medium hover:bg-destructive/90 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" /> Delete
+                </button>
+                <button
+                  onClick={() => setSelected(new Set())}
+                  className="px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Clear selection
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Select-all row (when there are documents) */}
+          {docs.length > 0 && (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                ref={(el) => { if (el) el.indeterminate = !allPageSelected && somePageSelected; }}
+                onChange={toggleSelectPage}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              Select all on this page
+            </label>
+          )}
+
+          {/* Document list / grid */}
+          {isLoading ? (
+            <div className={cn(
+              view === 'grid' ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'space-y-3'
+            )}>
+              {[...Array(8)].map((_, i) => (
+                <DocumentSkeleton key={i} view={view} />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-destructive/30 p-8 text-center">
+              <AlertCircle className="h-10 w-10 mx-auto text-destructive/60 mb-3" />
+              <p className="text-destructive font-medium">Failed to load documents</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">Check your connection and try again.</p>
+              <button
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['documents'] })}
+                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : !data || docs.length === 0 ? (
+            hasFilters ? (
+              <div className="rounded-xl border border-dashed p-12 text-center">
+                <Search className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No documents match your filters</h3>
+                <p className="text-muted-foreground mb-4">Try a different search term or clear the filters.</p>
+                <button
+                  onClick={clearFilters}
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed p-12 text-center">
+                <FileText className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
+                <p className="text-muted-foreground">Drop a PDF above, or click the upload area to choose a file.</p>
+              </div>
+            )
+          ) : view === 'grid' ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {docs.map((doc) => (
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  selected={selected.has(doc.id)}
+                  onToggle={() => toggleSelected(doc.id)}
+                  onRetry={() => retryMutation.mutate(doc.id)}
+                  onDelete={() => setConfirmDelete({ ids: [doc.id], label: `"${doc.originalFilename}"` })}
+                  onAsk={() => askAboutMutation.mutate(doc)}
+                />
+              ))}
+            </div>
+          ) : (
+            <DocumentTable
+              docs={docs}
+              selected={selected}
+              onToggle={toggleSelected}
+              onRetry={(id) => retryMutation.mutate(id)}
+              onDelete={(doc) => setConfirmDelete({ ids: [doc.id], label: `"${doc.originalFilename}"` })}
+              onAsk={(doc) => askAboutMutation.mutate(doc)}
             />
-          ))}
-        </div>
-      ) : (
-        <DocumentTable
-          docs={docs}
-          selected={selected}
-          onToggle={toggleSelected}
-          onRetry={(id) => retryMutation.mutate(id)}
-          onDelete={(doc) => setConfirmDelete({ ids: [doc.id], label: `"${doc.originalFilename}"` })}
-          onAsk={(doc) => askAboutMutation.mutate(doc)}
-        />
-      )}
+          )}
 
-      {/* Pagination */}
-      {data && data.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
-            aria-label="Previous page"
-            className="h-10 w-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-accent disabled:opacity-50"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <span className="text-sm text-muted-foreground">
-            Page {page + 1} of {data.totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min((data.totalPages || 1) - 1, p + 1))}
-            disabled={page >= (data.totalPages || 1) - 1}
-            aria-label="Next page"
-            className="h-10 w-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-accent disabled:opacity-50"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      )}
+          {/* Pagination */}
+          {data && data.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                aria-label="Previous page"
+                className="h-10 w-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-accent disabled:opacity-50"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1} of {data.totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min((data.totalPages || 1) - 1, p + 1))}
+                disabled={page >= (data.totalPages || 1) - 1}
+                aria-label="Next page"
+                className="h-10 w-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-accent disabled:opacity-50"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          )}
         </>
       )}
 

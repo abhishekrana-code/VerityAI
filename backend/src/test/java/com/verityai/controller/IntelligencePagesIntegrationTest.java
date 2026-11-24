@@ -336,9 +336,13 @@ class IntelligencePagesIntegrationTest {
                 .param("documentId", document.getId().toString()))
             .andExpect(status().isOk())
             .andReturn();
-        assertThat(entityNames(objectMapper.readTree(hidden.getResponse().getContentAsString())))
+        JsonNode hiddenIndex = objectMapper.readTree(hidden.getResponse().getContentAsString());
+        assertThat(entityNames(hiddenIndex))
             .contains("Alpha Corp", "Beta Systems")
             .doesNotContain("2024");
+        // A hidden-noise request reports the names it can see, never fewer.
+        assertThat(hiddenIndex.get("totalEntities").asInt())
+            .isEqualTo(hiddenIndex.get("entities").size());
 
         // includeNoise returns the raw index.
         MvcResult raw = mockMvc.perform(get("/api/v1/knowledge-graph/entities")

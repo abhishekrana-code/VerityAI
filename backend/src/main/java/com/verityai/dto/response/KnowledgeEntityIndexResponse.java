@@ -14,8 +14,10 @@ import java.util.UUID;
 public class KnowledgeEntityIndexResponse {
 
     /**
-     * Distinct names in this scope before the requested limit. When noise rows
-     * are hidden this counts the names observed in the scanned window.
+     * Distinct names in this scope before the requested limit. Only an
+     * unfiltered, noise-inclusive request counts every row; a filtered request
+     * or one that hides noise reports the names found in the scanned window, so
+     * the value is then a lower bound rather than the exact total.
      */
     private long totalEntities;
 

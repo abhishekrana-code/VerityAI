@@ -347,9 +347,9 @@ public class KnowledgeGraphService {
 
             boolean unfiltered = documentId == null && entityTypes.isEmpty() && (q == null || q.isBlank());
             KnowledgeEntityIndexResponse response = new KnowledgeEntityIndexResponse();
-            // The exact distinct-name count includes noise rows; once noise is
-            // hidden the count comes from the scanned window, which is what the
-            // caller can actually see.
+            // Only an unfiltered, noise-inclusive request can count every row;
+            // every other request (filtered, or noise hidden) reports the names
+            // found in the scanned window.
             response.setTotalEntities(unfiltered && includeNoise
                 ? entityRepository.countDistinctNamesByUserId(user.getId())
                 : grouped.size());
@@ -492,9 +492,7 @@ public class KnowledgeGraphService {
             if (documentId != null) {
                 predicates.add(cb.equal(root.get("document").get("id"), documentId));
             }
-            if (types.size() == 1) {
-                predicates.add(cb.equal(root.get("entityType"), types.get(0)));
-            } else if (!types.isEmpty()) {
+            if (!types.isEmpty()) {
                 predicates.add(root.get("entityType").in(types));
             }
             if (q != null && !q.isBlank()) {
@@ -522,9 +520,6 @@ public class KnowledgeGraphService {
     }
 
     private static EntityType parseType(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
         try {
             return EntityType.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
