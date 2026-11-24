@@ -117,13 +117,13 @@ public class RateLimitService {
     /** Consumes one upload slot for this user; 429 when exhausted. */
     public void checkUpload(UUID userId) {
         acquire("upload", userId.toString(), uploadConfig, ErrorCode.RATE_LIMITED,
-                "Upload limit reached — try again in about an hour.", 3600);
+                "Upload limit reached.", 3600);
     }
 
     /** Consumes one AI/chat request slot for this user; 429 when exhausted. */
     public void checkAiRequest(UUID userId) {
         acquire("ai", userId.toString(), aiConfig, ErrorCode.AI_RATE_LIMITED,
-                "AI request limit reached — try again in a minute.", 60);
+                "AI request limit reached.", 60);
     }
 
     private void acquire(String bucket, String key, RateLimiterConfig config,

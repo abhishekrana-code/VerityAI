@@ -2,29 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { ApiException } from './api';
 import { errorToast } from './errors';
 
-function apiException(status: number, message: string, code = 'ERROR'): ApiException {
-  return new ApiException({ status, code, message });
+function apiException(
+  status: number,
+  message: string,
+  code = 'ERROR',
+  retryAfterSeconds: number | null = null,
+): ApiException {
+  return new ApiException({ status, code, message }, retryAfterSeconds);
 }
 
 describe('errorToast', () => {
-  it('maps a 429 ApiException to a dedicated rate-limit message', () => {
+  it('shows the Retry-After wait on an AI rate limit', () => {
     const props = errorToast(
-      apiException(429, 'AI request limit reached, please try again later', 'AI_RATE_LIMITED'),
-      'Failed to send'
+      apiException(429, 'AI request limit reached.', 'AI_RATE_LIMITED', 60),
+      'Failed to send',
     );
 
     expect(props).toEqual({
       title: 'Rate limit reached',
-      description: 'AI request limit reached, please try again later',
+      description: 'AI request limit reached. Try again in about 1 minute.',
       variant: 'destructive',
     });
   });
 
-  it('falls back to a generic rate-limit description when the backend sends none', () => {
+  it('uses seconds for waits under a minute and hours for long ones', () => {
+    expect(errorToast(apiException(429, '', 'AI_RATE_LIMITED', 42), 'Failed to send').description)
+      .toBe('Too many requests. Try again in about 42 seconds.');
+    expect(errorToast(apiException(429, 'Upload limit reached.', 'RATE_LIMITED', 3600), 'Upload failed').description)
+      .toBe('Upload limit reached. Try again in about 1 hour.');
+  });
+
+  it('falls back to a generic wait when no Retry-After is sent', () => {
     const props = errorToast(apiException(429, '', 'RATE_LIMITED'), 'Upload failed');
 
     expect(props.title).toBe('Rate limit reached');
-    expect(props.description).toBe('Too many requests — please wait a moment and try again.');
+    expect(props.description).toBe('Too many requests. Please wait a moment and try again.');
     expect(props.variant).toBe('destructive');
   });
 
