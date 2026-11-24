@@ -40,6 +40,9 @@ public interface ContradictionRepository extends JpaRepository<Contradiction, UU
         + "WHERE c.documentA.id = :documentId OR c.documentB.id = :documentId")
     int deleteByDocumentId(@Param("documentId") UUID documentId);
 
+    /** Every finding the user has, for the account export. */
+    List<Contradiction> findByUserIdOrderByDetectedAtDesc(UUID userId);
+
     @Query("SELECT c.contradictionType, COUNT(c) FROM Contradiction c "
         + "WHERE c.user.id = :userId GROUP BY c.contradictionType")
     List<Object[]> countByType(@Param("userId") UUID userId);

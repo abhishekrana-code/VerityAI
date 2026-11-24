@@ -31,4 +31,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
     void touch(@Param("id") UUID id, @Param("now") Instant now);
 
     List<Conversation> findByUserIdAndArchivedAtIsNotNull(UUID userId);
+
+    /** Every conversation the user owns, archived included, for the account export. */
+    List<Conversation> findByUserIdOrderByCreatedAtAsc(UUID userId);
 }

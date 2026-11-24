@@ -94,6 +94,16 @@ export function useDeleteAccount() {
   });
 }
 
+export function useExportData() {
+  return useMutation<void, ApiException, void>({
+    mutationFn: () =>
+      api.download(
+        '/users/me/export',
+        `verityai-export-${new Date().toISOString().slice(0, 10)}.json`,
+      ),
+  });
+}
+
 export function useRequestPasswordReset() {
   return useMutation<void, ApiException, PasswordResetRequest>({
     mutationFn: (data: PasswordResetRequest) =>

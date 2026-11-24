@@ -31,6 +31,7 @@ Fetch a token first from `GET /auth/csrf`.
 | PATCH | `/auth/users/me` | `{ displayName? }` profile update |
 | POST | `/auth/users/me/password` | `{ currentPassword, newPassword }` |
 | DELETE | `/users/me` | `{ password }` → permanently deletes the account, all of its rows and every stored PDF, then revokes the session. Returns `204`; a wrong password returns `403` and deletes nothing |
+| GET | `/users/me/export` | The account's own data as a downloadable JSON file (`Content-Disposition: attachment`, `Cache-Control: no-store`): account details, document metadata, conversations with messages and citations, and stored check results. Read-only; PDF bytes are not included |
 
 > Registration signs the new account in, so a client goes straight to the
 > dashboard. Only an existing email returns `authenticated: false` and needs a

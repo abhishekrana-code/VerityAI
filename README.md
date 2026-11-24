@@ -280,6 +280,7 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 | PATCH | `/auth/users/me` | Profile update |
 | POST | `/auth/users/me/password` | Change password |
 | DELETE | `/users/me` | Delete the account, its rows and stored PDFs (password-confirmed) |
+| GET | `/users/me/export` | Download the account's documents metadata, conversations and check results as JSON |
 | GET/POST | `/documents` | List / upload PDF (multipart field `file`) |
 | GET/DELETE | `/documents/{id}`, `/documents/{id}/status` | Detail, processing status, delete |
 | POST | `/documents/{id}/retry` | Re-run failed processing |

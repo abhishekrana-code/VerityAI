@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuth, useUpdateProfile, useChangePassword, useDeleteAccount } from '@/hooks/useAuth';
-import { Loader2, User as UserIcon, Lock, Palette, Save, Sun, Moon, Monitor, Trash2 } from 'lucide-react';
+import { useAuth, useUpdateProfile, useChangePassword, useDeleteAccount, useExportData } from '@/hooks/useAuth';
+import { Loader2, User as UserIcon, Lock, Palette, Save, Sun, Moon, Monitor, Trash2, Download } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
@@ -231,13 +231,59 @@ export function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'data' && <DeleteAccountPanel />}
+          {activeTab === 'data' && (
+            <div className="space-y-8">
+              <ExportDataPanel />
+              <DeleteAccountPanel />
+            </div>
+          )}
         </div>
       </div>
 
       <ToastProvider>
         <ToastViewport />
       </ToastProvider>
+    </div>
+  );
+}
+
+/**
+ * Read-only counterpart to the delete block: saves the account's JSON export
+ * through the browser's normal download flow.
+ */
+function ExportDataPanel() {
+  const exportData = useExportData();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="font-medium mb-1">Export my data</h3>
+        <p className="text-sm text-muted-foreground">
+          Downloads a JSON file with your document list, conversations and check results.
+          The PDFs themselves are not included.
+        </p>
+        {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
+      </div>
+      <button
+        type="button"
+        disabled={exportData.isPending}
+        onClick={() => {
+          setError(null);
+          exportData.mutate(undefined, {
+            onError: (mutationError) =>
+              setError(mutationError.message || 'Could not export your data. Try again.'),
+          });
+        }}
+        className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+      >
+        {exportData.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        {exportData.isPending ? 'Preparing…' : 'Download JSON'}
+      </button>
     </div>
   );
 }

@@ -23,6 +23,9 @@ public interface MessageRepository extends JpaRepository<Message, UUID>,
 
     long countByConversationId(UUID conversationId);
 
+    /** Every message across all of a user's conversations, for the account export. */
+    List<Message> findByConversationUserIdOrderByCreatedAtAsc(UUID userId);
+
     /** Eager-loads the conversation so ownership checks work outside a transaction (OSIV is off). */
     @Query("SELECT m FROM Message m JOIN FETCH m.conversation WHERE m.id = :id")
     Optional<Message> findByIdWithConversation(@Param("id") UUID id);

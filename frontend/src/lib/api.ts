@@ -208,6 +208,39 @@ export class ApiClient {
     }
   }
 
+  /**
+   * GET a JSON file and save it via a temporary object URL. Errors use the
+   * same envelope as every other request, so callers show the server message.
+   */
+  async download(endpoint: string, filename: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, { credentials: 'include' });
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      const errorData = contentType?.includes('application/json')
+        ? await response.json()
+        : { message: await response.text() };
+      throw new ApiException({
+        timestamp: new Date().toISOString(),
+        status: response.status,
+        code: errorData.code || 'ERROR',
+        message: errorData.message || 'An error occurred',
+        path: endpoint,
+        requestId: response.headers.get('X-Request-ID') || '',
+        fieldErrors: errorData.fieldErrors,
+      });
+    }
+
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PATCH',

@@ -20,6 +20,9 @@ public interface DocumentRepository extends JpaRepository<Document, UUID>, JpaSp
 
     Page<Document> findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    /** Every live document the user owns, for the account export. */
+    List<Document> findByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(UUID userId);
+
     Page<Document> findByUserIdAndStatusAndDeletedAtIsNull(UUID userId, Document.DocumentStatus status, Pageable pageable);
 
     @Query("SELECT d FROM Document d WHERE d.user.id = :userId AND d.deletedAt IS NULL AND " +
