@@ -1,0 +1,37 @@
+[
+  {
+    "id": "revenue-growth",
+    "question": "What was the revenue growth in 2024?",
+    "expectedDocuments": ["2024-annual-report.pdf"],
+    "shouldRefuse": false,
+    "mustMentionAny": ["42 percent", "42%", "42"]
+  },
+  {
+    "id": "board-target-vs-actual",
+    "question": "What percentage revenue increase did the board approve?",
+    "expectedDocuments": ["2024-board-notes.pdf"],
+    "shouldRefuse": false,
+    "mustMentionAny": ["38 percent", "38%", "38"]
+  },
+  {
+    "id": "lantern-launch",
+    "question": "When does Project Lantern launch?",
+    "expectedDocuments": ["product-memo.pdf"],
+    "shouldRefuse": false,
+    "mustMentionAny": ["march 2025", "march"]
+  },
+  {
+    "id": "missing-ceo-salary",
+    "question": "What was the chief executive's total compensation in 2024?",
+    "expectedDocuments": [],
+    "shouldRefuse": true,
+    "mustMentionAny": []
+  },
+  {
+    "id": "missing-berlin-headcount",
+    "question": "How many employees work in the Berlin office?",
+    "expectedDocuments": [],
+    "shouldRefuse": true,
+    "mustMentionAny": []
+  }
+]

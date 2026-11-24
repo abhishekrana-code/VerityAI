@@ -194,6 +194,39 @@ caught by a prefix alone. The stack must be running; `DB_CONTAINER`,
 in-container upload path. Without `--purge-files` the files are left to the
 hourly `OrphanFileReconciler` sweep, which is enabled in `docker-compose.yml`.
 
+## Answer-quality evaluation (live model)
+
+Everything above mocks the LLM, which keeps CI deterministic but means no test
+can notice that grounding got worse — a prompt edit, a model swap or a
+deprecated provider model all leave the suite green. `AnswerQualityEvaluationTest`
+is the opt-in counterpart: it uploads a three-document gold corpus through the
+real ingestion pipeline, asks five questions through `ChatService` with the real
+model, and scores the answers.
+
+```bash
+./scripts/eval-answers.sh          # print the plan, run nothing
+./scripts/eval-answers.sh --run    # upload the corpus, ask 5 questions, write the report
+```
+
+The corpus covers the one confusion the product must not make — actual 42%
+revenue versus the board's 38% **target** — a launch date, and two questions the
+documents cannot answer. Scoring is deterministic (`AnswerQualityScorer`, unit
+tested in CI): an answer passes only when it cites the expected document and
+contains the expected fact without refusing; an unanswerable question passes
+only when it refuses **and** cites nothing. Any failing question fails the run.
+The report also carries citation precision and the retrieval strategy used.
+
+It needs Docker (PostgreSQL) and a real `LLM_API_KEY`/`GROQ_API_KEY` from the
+environment or `./.env`, and it spends one model call per question. Knobs:
+`EVAL_MODEL`, `EVAL_EMBEDDINGS=off` (keyword-only, faster) and
+`EVAL_TIMEOUT_SECONDS`. The full per-question report — answers, citations,
+evidence status, latency, token counts — is written to
+`backend/target/eval/answer-quality.json`.
+
+Run it before changing the RAG prompt, citation rules, retrieval defaults or the
+model, and compare the report to the previous run. It is a small sample: it
+detects a regression, it does not measure quality in absolute terms.
+
 ## CI
 
 `.github/workflows/ci.yml` runs three jobs on every push and pull request:
