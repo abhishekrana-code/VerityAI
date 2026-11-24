@@ -274,11 +274,12 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/auth/register`, `/auth/login`, `/auth/logout` | Session cookie auth; CSRF-exempt. Registration is session-free and returns a generic response |
+| POST | `/auth/register`, `/auth/login`, `/auth/logout` | Session cookie auth; CSRF-exempt. Registration signs the new account in; a duplicate email returns a generic response |
 | POST | `/auth/password-reset/request`, `/auth/password-reset/confirm` | Non-enumerating reset request; single-use token confirmation invalidates all sessions |
 | GET | `/auth/csrf`, `/auth/me` | Provision CSRF token / current user |
 | PATCH | `/auth/users/me` | Profile update |
 | POST | `/auth/users/me/password` | Change password |
+| DELETE | `/users/me` | Delete the account, its rows and stored PDFs (password-confirmed) |
 | GET/POST | `/documents` | List / upload PDF (multipart field `file`) |
 | GET/DELETE | `/documents/{id}`, `/documents/{id}/status` | Detail, processing status, delete |
 | POST | `/documents/{id}/retry` | Re-run failed processing |

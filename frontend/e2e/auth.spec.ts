@@ -53,6 +53,34 @@ test.describe('authentication and sessions', () => {
     }
   });
 
+  test('deletes the account and its session after password confirmation', async ({ page }) => {
+    const user = uniqueUser('delete');
+    await registerAndLogin(page, user);
+
+    await page.goto('/dashboard/settings');
+    await page.getByRole('button', { name: 'Data' }).click();
+
+    // A wrong password must fail and leave the account and session intact.
+    await page.locator('#deleteAccountPassword').fill('definitely-not-the-password');
+    await page.getByRole('button', { name: 'Delete my account' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete account' }).click();
+    await expect(page.getByRole('alert')).toContainText(/password/i);
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+
+    await page.locator('#deleteAccountPassword').fill(user.password);
+    await page.getByRole('button', { name: 'Delete my account' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete account' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    // The session is gone, and so is the account.
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/login$/);
+
+    await login(page, user);
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('alert')).toBeVisible();
+  });
+
   test('persists a profile display-name change across reloads', async ({ page }) => {
     const user = uniqueUser();
     await registerAndLogin(page, user);

@@ -82,6 +82,19 @@ export function useChangePassword() {
   });
 }
 
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation<void, ApiException, { password: string }>({
+    mutationFn: ({ password }) => api.delete<void>('/users/me', { password }),
+    onSuccess: () => {
+      // The account and its session are gone server-side; drop the cached
+      // principal so nothing in this tab still believes it is signed in.
+      queryClient.setQueryData(['auth', 'me'], { user: null, authenticated: false });
+      queryClient.clear();
+    },
+  });
+}
+
 export function useRequestPasswordReset() {
   return useMutation<void, ApiException, PasswordResetRequest>({
     mutationFn: (data: PasswordResetRequest) =>

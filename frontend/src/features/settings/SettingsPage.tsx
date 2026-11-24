@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuth, useUpdateProfile, useChangePassword } from '@/hooks/useAuth';
-import { Loader2, User as UserIcon, Lock, Palette, Save, Sun, Moon, Monitor } from 'lucide-react';
+import { useAuth, useUpdateProfile, useChangePassword, useDeleteAccount } from '@/hooks/useAuth';
+import { Loader2, User as UserIcon, Lock, Palette, Save, Sun, Moon, Monitor, Trash2 } from 'lucide-react';
+import { ApiException } from '@/lib/api';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,13 +33,18 @@ type PasswordForm = z.infer<typeof passwordSchema>;
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: auth } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'preferences'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'preferences' | 'data'>('profile');
   const { theme, setTheme } = useTheme();
 
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
+  const deleteAccount = useDeleteAccount();
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -81,6 +89,7 @@ export function SettingsPage() {
             { id: 'profile', label: 'Profile', icon: UserIcon },
             { id: 'password', label: 'Password', icon: Lock },
             { id: 'preferences', label: 'Preferences', icon: Palette },
+            { id: 'data', label: 'Data', icon: Trash2 },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -222,13 +231,92 @@ export function SettingsPage() {
                 <h3 className="font-medium mb-4">Notifications</h3>
                 <p className="text-sm text-muted-foreground">
                   Email notifications are not available in this build. Document processing
-                  updates appear in History as they happen.
+                  updates appear in the document's Processing tab.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'data' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-medium mb-1">Delete my account and data</h3>
+                <p className="text-sm text-muted-foreground">
+                  This permanently deletes your account, your documents and their stored PDFs,
+                  conversations, citations, checks and entity data. It cannot be undone.
+                </p>
+              </div>
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                <label htmlFor="deleteAccountPassword" className="block text-sm font-medium mb-2">
+                  Confirm your password
+                </label>
+                <input
+                  id="deleteAccountPassword"
+                  type="password"
+                  autoComplete="current-password"
+                  value={deletePassword}
+                  onChange={(event) => {
+                    setDeletePassword(event.target.value);
+                    setDeleteError(null);
+                  }}
+                  className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                {deleteError && (
+                  <p role="alert" className="mt-2 text-sm text-destructive">{deleteError}</p>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={deleteAccount.isPending}
+                    onClick={() => {
+                      if (!deletePassword) {
+                        setDeleteError('Enter your password to continue.');
+                        return;
+                      }
+                      setConfirmDeleteOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                  >
+                    {deleteAccount.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Delete my account
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete this account permanently?"
+        description="Your documents, stored PDFs, conversations and check results are deleted immediately. There is no undo."
+        confirmLabel="Delete account"
+        loading={deleteAccount.isPending}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={() => {
+          setDeleteError(null);
+          deleteAccount.mutate({ password: deletePassword }, {
+            onSuccess: () => {
+              setConfirmDeleteOpen(false);
+              setDeletePassword('');
+              navigate('/login', { replace: true });
+            },
+            onError: (error) => {
+              setConfirmDeleteOpen(false);
+              setDeleteError(
+                error instanceof ApiException && error.message
+                  ? error.message
+                  : 'Could not delete your account. Try again.',
+              );
+            },
+          });
+        }}
+      />
 
       <ToastProvider>
         <ToastViewport />

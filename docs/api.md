@@ -21,7 +21,7 @@ Fetch a token first from `GET /auth/csrf`.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/auth/register` | `{ email, password, displayName? }` → creates the account. Always returns `200 { user: null, authenticated: false }` (no session, no account-existence disclosure). Rate-limited per client IP |
+| POST | `/auth/register` | `{ email, password, displayName? }` → creates the account and signs it in (`{ user, authenticated: true }`). A duplicate email returns the same generic `200` with `authenticated: false`, so account existence is not disclosed. Rate-limited per client IP |
 | POST | `/auth/login` | `{ email, password }` → sets the session cookie, rotates the session id, and invalidates every other session for the account. Rate-limited per client IP **and** per target account (429 + `Retry-After`) |
 | POST | `/auth/logout` | Revokes the session |
 | GET | `/auth/me` | Current user (`200 { authenticated: false }` when anonymous) |
@@ -30,9 +30,11 @@ Fetch a token first from `GET /auth/csrf`.
 | POST | `/auth/password-reset/confirm` | `{ token, newPassword }` → changes the password, consumes the token, and invalidates all sessions. Invalid/expired tokens return `400 VALIDATION_ERROR` |
 | PATCH | `/auth/users/me` | `{ displayName? }` profile update |
 | POST | `/auth/users/me/password` | `{ currentPassword, newPassword }` |
+| DELETE | `/users/me` | `{ password }` → permanently deletes the account, all of its rows and every stored PDF, then revokes the session. Returns `204`; a wrong password returns `403` and deletes nothing |
 
-> Registration deliberately does **not** sign the user in. Clients must call
-> `/auth/login` after a successful registration.
+> Registration signs the new account in, so a client goes straight to the
+> dashboard. Only an existing email returns `authenticated: false` and needs a
+> normal sign-in.
 
 ---
 
