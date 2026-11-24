@@ -13,21 +13,23 @@ import com.verityai.repository.ConversationRepository;
 import com.verityai.repository.MessageCitationRepository;
 import com.verityai.repository.MessageRepository;
 import com.verityai.service.retrieval.RetrievalService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ChatService {
 
@@ -37,6 +39,23 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final MessageCitationRepository citationRepository;
     private final ConversationRepository conversationRepository;
+    private final TransactionTemplate transactionTemplate;
+
+    public ChatService(RetrievalService retrievalService,
+                       LlmService llmService,
+                       DocumentRepository documentRepository,
+                       MessageRepository messageRepository,
+                       MessageCitationRepository citationRepository,
+                       ConversationRepository conversationRepository,
+                       PlatformTransactionManager transactionManager) {
+        this.retrievalService = retrievalService;
+        this.llmService = llmService;
+        this.documentRepository = documentRepository;
+        this.messageRepository = messageRepository;
+        this.citationRepository = citationRepository;
+        this.conversationRepository = conversationRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     @Value("${verityai.llm.model:openai/gpt-oss-20b}")
     private String model;
@@ -53,10 +72,65 @@ public class ChatService {
      */
     @Transactional(noRollbackFor = LlmGenerationException.class)
     public MessageResponse ask(Conversation conversation, String question, List<UUID> requestedDocIds) {
+        List<RetrievalService.RetrievedChunk> evidence = prepare(conversation, question, requestedDocIds);
+
+        LlmService.ChatResponse llmResponse;
+        try {
+            llmResponse = llmService.generate(chatRequest(question, evidence));
+        } catch (Exception e) {
+            log.error("LLM generation failed", e);
+            throw fail(conversation, e);
+        }
+        return persist(conversation, evidence, llmResponse);
+    }
+
+    /**
+     * Streamed variant: each delta goes to {@code onDelta} while the model is
+     * answering, and the same message and citations are stored at the end.
+     *
+     * <p>Deliberately not transactional — the model call can take a minute and
+     * holding a database connection for its whole duration would be worse than
+     * the small window between the assistant message and its citations. Setup
+     * runs before the first delta, so ownership errors still happen before
+     * anything streams.</p>
+     */
+    public MessageResponse streamAsk(Conversation conversation, String question,
+                                     List<UUID> requestedDocIds, Consumer<String> onDelta) {
+        List<RetrievalService.RetrievedChunk> evidence = prepare(conversation, question, requestedDocIds);
+
+        LlmService.ChatResponse llmResponse;
+        try {
+            llmResponse = llmService.stream(chatRequest(question, evidence), onDelta);
+        } catch (Exception e) {
+            log.error("Streamed LLM generation failed", e);
+            throw fail(conversation, e);
+        }
+        return persist(conversation, evidence, llmResponse);
+    }
+
+    private LlmService.ChatRequest chatRequest(String question, List<RetrievalService.RetrievedChunk> evidence) {
+        return new LlmService.ChatRequest(question, evidence, model, maxTokens);
+    }
+
+    /**
+     * Resolves and checks the document scope, saves the user message and
+     * retrieves evidence. Shared by both answer paths so streaming cannot drift
+     * from the non-streaming contract.
+     */
+    private List<RetrievalService.RetrievedChunk> prepare(
+            Conversation conversation, String question, List<UUID> requestedDocIds) {
+        // A template, not @Transactional, because the streaming path must not
+        // hold this transaction (or a pooled connection) for the model call.
+        // Inside ask() it simply joins the existing transaction.
+        return transactionTemplate.execute(status -> doPrepare(conversation, question, requestedDocIds));
+    }
+
+    private List<RetrievalService.RetrievedChunk> doPrepare(
+            Conversation conversation, String question, List<UUID> requestedDocIds) {
         UUID userId = conversation.getUser().getId();
 
-        // Determine document scope. Explicit ids come from the caller and must
-        // all exist; the conversation's own join rows are trusted.
+        // Explicit ids come from the caller and must all exist; the
+        // conversation's own join rows are trusted.
         List<UUID> docIds;
         boolean explicitScope = requestedDocIds != null && !requestedDocIds.isEmpty();
         if (explicitScope) {
@@ -70,7 +144,6 @@ public class ChatService {
                 .collect(Collectors.toList());
         }
 
-        // Verify every requested document exists and belongs to the caller.
         if (!docIds.isEmpty()) {
             List<Document> docs = documentRepository.findAllById(docIds);
             if (explicitScope && docs.size() != docIds.size()) {
@@ -83,7 +156,6 @@ public class ChatService {
             }
         }
 
-        // Save user message
         Message userMessage = new Message();
         userMessage.setConversation(conversation);
         userMessage.setRole(Message.MessageRole.USER);
@@ -91,34 +163,18 @@ public class ChatService {
         userMessage.setStatus(Message.MessageStatus.COMPLETED);
         messageRepository.save(userMessage);
 
-        // Retrieve evidence strictly scoped to requested/conversation documents
-        List<RetrievalService.RetrievedChunk> evidence = retrievalService.retrieve(userId, question, docIds.isEmpty() ? null : docIds);
+        List<RetrievalService.RetrievedChunk> evidence =
+            retrievalService.retrieve(userId, question, docIds.isEmpty() ? null : docIds);
 
-        // Generate answer
-        LlmService.ChatRequest chatRequest = new LlmService.ChatRequest(
-            question,
-            evidence,
-            model,
-            maxTokens
-        );
+        // The prompt and the stored citations read each chunk's document. That
+        // association is lazy, so force it here, while the session is open:
+        // streamAsk() builds the prompt after this transaction has committed.
+        evidence.forEach(chunk -> Hibernate.initialize(chunk.chunk().getDocument()));
+        return evidence;
+    }
 
-        LlmService.ChatResponse llmResponse;
-        try {
-            llmResponse = llmService.generate(chatRequest);
-        } catch (Exception e) {
-            log.error("LLM generation failed", e);
-            String failureText = LlmErrors.friendlyMessage(e);
-            Message errorMessage = new Message();
-            errorMessage.setConversation(conversation);
-            errorMessage.setRole(Message.MessageRole.ASSISTANT);
-            errorMessage.setContent(failureText);
-            errorMessage.setStatus(Message.MessageStatus.FAILED);
-            errorMessage.setModel(model);
-            messageRepository.save(errorMessage);
-            throw new LlmGenerationException(failureText);
-        }
-
-        // Determine evidence status
+    private MessageResponse persist(Conversation conversation, List<RetrievalService.RetrievedChunk> evidence,
+                                    LlmService.ChatResponse llmResponse) {
         Message.EvidenceStatus evidenceStatus;
         if (evidence.isEmpty()) {
             evidenceStatus = Message.EvidenceStatus.NONE;
@@ -128,7 +184,6 @@ public class ChatService {
             evidenceStatus = Message.EvidenceStatus.SUFFICIENT;
         }
 
-        // Save assistant message
         Message assistantMessage = new Message();
         assistantMessage.setConversation(conversation);
         assistantMessage.setRole(Message.MessageRole.ASSISTANT);
@@ -141,7 +196,6 @@ public class ChatService {
         assistantMessage.setEvidenceStatus(evidenceStatus);
         messageRepository.save(assistantMessage);
 
-        // Save citations
         List<MessageCitation> citations = new ArrayList<>();
         for (int citedIdx : llmResponse.citedIndices()) {
             if (citedIdx >= 0 && citedIdx < evidence.size()) {
@@ -159,10 +213,22 @@ public class ChatService {
         }
         citationRepository.saveAll(citations);
 
-        // Update conversation timestamp
         conversationRepository.touch(conversation.getId(), Instant.now());
 
         return toMessageResponse(assistantMessage, citations);
+    }
+
+    /** Records the failure and returns the exception the caller should throw. */
+    private LlmGenerationException fail(Conversation conversation, Exception cause) {
+        String failureText = LlmErrors.friendlyMessage(cause);
+        Message errorMessage = new Message();
+        errorMessage.setConversation(conversation);
+        errorMessage.setRole(Message.MessageRole.ASSISTANT);
+        errorMessage.setContent(failureText);
+        errorMessage.setStatus(Message.MessageStatus.FAILED);
+        errorMessage.setModel(model);
+        messageRepository.save(errorMessage);
+        return new LlmGenerationException(failureText);
     }
 
     private MessageResponse toMessageResponse(Message message, List<MessageCitation> citations) {

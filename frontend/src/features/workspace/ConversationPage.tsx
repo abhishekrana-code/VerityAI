@@ -35,6 +35,8 @@ export function ConversationPage() {
   const [pickerSelected, setPickerSelected] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ doc: PdfPreviewTarget; page: number } | null>(null);
   const [verifications, setVerifications] = useState<Record<string, ClaimVerificationResponse>>({});
+  // Text of the answer currently streaming in; null when nothing is streaming.
+  const [streamedAnswer, setStreamedAnswer] = useState<string | null>(null);
 
   // Consume the hand-off question so reloading the page starts empty again.
   useEffect(() => {
@@ -69,7 +71,28 @@ export function ConversationPage() {
   });
 
   const askMutation = useMutation({
-    mutationFn: (q: string) => api.post<Message>(`/conversations/${conversationId}/messages`, { question: q, documentIds: [] }),
+    // The answer streams in token by token; the final message (with citations)
+    // arrives in the `done` event and replaces the partial bubble.
+    mutationFn: async (q: string) => {
+      setStreamedAnswer('');
+      let received = '';
+      await api.streamAnswer<Message>(
+        `/conversations/${conversationId}/messages/stream`,
+        { question: q, documentIds: [] },
+        {
+          onToken: (text) => {
+            received += text;
+            setStreamedAnswer(received);
+          },
+          onDone: (message) => {
+            setStreamedAnswer(null);
+            queryClient.setQueryData<MessageListResponse>(['messages', conversationId], (old) =>
+              old ? { ...old, content: [...old.content, message] } : old,
+            );
+          },
+        },
+      );
+    },
     onMutate: async (newQuestion) => {
       await queryClient.cancelQueries({ queryKey: ['messages', conversationId] });
       const previousMessages = queryClient.getQueryData<MessageListResponse>(['messages', conversationId]);
@@ -93,6 +116,7 @@ export function ConversationPage() {
       return { previousMessages };
     },
     onError: (err, newQuestion, context) => {
+      setStreamedAnswer(null);
       if (context?.previousMessages) {
         queryClient.setQueryData(['messages', conversationId], context.previousMessages);
       }
@@ -108,8 +132,8 @@ export function ConversationPage() {
     },
   });
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   const dismissCitationExplainer = () => {
@@ -193,8 +217,9 @@ export function ConversationPage() {
   }, [showContextPicker]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messagesData?.content.length, isFetching]);
+    // Smooth scrolling every token fights the reader; follow the stream directly.
+    scrollToBottom(streamedAnswer ? 'auto' : 'smooth');
+  }, [messagesData?.content.length, isFetching, streamedAnswer]);
 
   if (convLoading) {
     return (
@@ -407,12 +432,21 @@ export function ConversationPage() {
           </>
         )}
 
-        {/* Typing indicator */}
+        {/* The answer as it streams, then a spinner until the first token. */}
         {askMutation.isPending && (
-          <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
-            <Loader2 className="h-5 w-5" />
-            <span>Generating answer...</span>
-          </div>
+          streamedAnswer ? (
+            <div className="flex gap-3">
+              <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-border/70 bg-card px-4 py-3 text-sm shadow-sm">
+                <Markdown>{streamedAnswer}</Markdown>
+                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary/70 align-middle" aria-hidden="true" />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
+              <Loader2 className="h-5 w-5" />
+              <span>Generating answer...</span>
+            </div>
+          )
         )}
       </div>
 

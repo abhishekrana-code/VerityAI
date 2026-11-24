@@ -114,6 +114,100 @@ export class ApiClient {
     });
   }
 
+  /**
+   * POST that consumes a server-sent-event answer stream. `onToken` fires as
+   * text arrives; `onDone` receives the stored message (citations, evidence
+   * status, usage), which is exactly what the non-streaming endpoint returns.
+   * Resolves after the `done` event.
+   */
+  async streamAnswer<T>(
+    endpoint: string,
+    data: unknown,
+    handlers: { onToken: (text: string) => void; onDone: (message: T) => void },
+  ): Promise<void> {
+    const url = `${this.baseUrl}${endpoint}`;
+    await this.ensureCsrf();
+
+    const send = () =>
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          ...(this.csrfToken ? { 'X-XSRF-TOKEN': this.csrfToken } : {}),
+        },
+        body: JSON.stringify(data),
+        credentials: 'include',
+      });
+
+    let response = await send();
+    if (response.status === 403) {
+      this.csrfToken = null;
+      await this.ensureCsrf();
+      response = await send();
+    }
+
+    if (!response.ok || !response.body) {
+      let errorData: { code?: string; message?: string; fieldErrors?: ApiError['fieldErrors'] } = {};
+      try {
+        errorData = await response.json();
+      } catch {
+        // Non-JSON error body; fall back to the generic message below.
+      }
+      throw new ApiException(
+        {
+          timestamp: new Date().toISOString(),
+          status: response.status,
+          code: errorData.code || 'ERROR',
+          message: errorData.message || 'The answer could not be generated',
+          path: endpoint,
+          requestId: response.headers.get('X-Request-ID') || '',
+          fieldErrors: errorData.fieldErrors,
+        },
+        parseRetryAfter(response.headers.get('Retry-After')),
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const handleBlock = (block: string) => {
+      let event = 'message';
+      const dataLines: string[] = [];
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+      }
+      if (dataLines.length === 0) return;
+      const payload = dataLines.join('\n');
+      if (event === 'token') {
+        handlers.onToken((JSON.parse(payload) as { text?: string }).text ?? '');
+      } else if (event === 'done') {
+        handlers.onDone(JSON.parse(payload) as T);
+      } else if (event === 'error') {
+        const parsed = JSON.parse(payload) as { message?: string };
+        throw new Error(parsed.message || 'The answer could not be generated');
+      }
+    };
+
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, '\n');
+        let boundary: number;
+        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          handleBlock(block);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PATCH',

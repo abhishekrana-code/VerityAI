@@ -1,5 +1,6 @@
 package com.verityai.controller;
 
+import com.verityai.config.StreamingConfig.AnswerStreamExecutor;
 import com.verityai.dto.request.AskQuestionRequest;
 import com.verityai.dto.request.CreateConversationRequest;
 import com.verityai.dto.request.UpdateConversationRequest;
@@ -32,7 +33,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashSet;
 import java.util.List;
@@ -53,6 +57,10 @@ public class ConversationController {
     private final ChatService chatService;
     private final RateLimitService rateLimitService;
     private final com.verityai.service.verification.ClaimVerificationService claimVerificationService;
+    private final AnswerStreamExecutor answerStreamExecutor;
+
+    @org.springframework.beans.factory.annotation.Value("${verityai.llm.stream-timeout-ms:120000}")
+    private long streamTimeoutMs;
 
     @PostMapping
     public ResponseEntity<ConversationResponse> create(@CurrentUser User user, @Valid @RequestBody CreateConversationRequest request) {
@@ -199,6 +207,58 @@ public class ConversationController {
         MessageResponse response = chatService.ask(conversation, request.getQuestion(), request.getDocumentIds());
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Streamed answer. Tokens arrive as {@code token} events while the model is
+     * writing; the final {@code done} event carries the same message body as
+     * {@link #ask}, including citations, so the client ends in the identical
+     * state. A failure sends {@code error} and the message is stored as FAILED.
+     */
+    @PostMapping(value = "/{id}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(@CurrentUser User user, @PathVariable UUID id,
+                             @Valid @RequestBody AskQuestionRequest request) {
+        rateLimitService.checkAiRequest(user.getId());
+        Conversation conversation = conversationRepository.findByIdAndUserIdAndArchivedAtIsNull(id, user.getId())
+            .orElseThrow(() -> ApiException.notFound("Conversation not found"));
+
+        // The servlet thread returns immediately; the model call runs on the
+        // bounded stream pool. Auth and ownership were checked above, so the
+        // worker never needs the security context.
+        SseEmitter emitter = new SseEmitter(streamTimeoutMs);
+        try {
+            answerStreamExecutor.submit(() -> streamAnswer(emitter, conversation, request));
+        } catch (TaskRejectedException e) {
+            throw ApiException.queueFull("Too many answers are streaming right now, please retry shortly", 10);
+        }
+        return emitter;
+    }
+
+    private void streamAnswer(SseEmitter emitter, Conversation conversation, AskQuestionRequest request) {
+        try {
+            MessageResponse response = chatService.streamAsk(
+                conversation, request.getQuestion(), request.getDocumentIds(),
+                delta -> send(emitter, "token", new TokenEvent(delta)));
+            send(emitter, "done", response);
+        } catch (Exception e) {
+            send(emitter, "error", new ErrorEvent(
+                e.getMessage() == null || e.getMessage().isBlank() ? "The answer could not be generated" : e.getMessage()));
+        } finally {
+            emitter.complete();
+        }
+    }
+
+    private static void send(SseEmitter emitter, String event, Object data) {
+        try {
+            emitter.send(SseEmitter.event().name(event).data(data, MediaType.APPLICATION_JSON));
+        } catch (Exception e) {
+            // The browser went away mid-answer. Nothing useful can be sent now;
+            // completing is enough, and the stored message is still correct.
+            emitter.complete();
+        }
+    }
+
+    private record TokenEvent(String text) {}
+    private record ErrorEvent(String message) {}
 
     /** Stored claim verification for one assistant message (no model call). */
     @GetMapping("/{id}/messages/{messageId}/verify")

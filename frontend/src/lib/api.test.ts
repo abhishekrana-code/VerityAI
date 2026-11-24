@@ -131,6 +131,78 @@ describe('ApiClient', () => {
     expect(apiError.message).toBe('Invalid credentials');
   });
 
+  it('reads an SSE answer stream, delivering tokens then the final message', async () => {
+    const encoder = new TextEncoder();
+    const chunks = [
+      'event:token\ndata:{"text":"Revenue "}\n\n',
+      'event:token\ndata:{"text":"grew 42 percent. [S1]"}\n\n' +
+        'event:done\ndata:{"id":"m1","role":"ASSISTANT"}\n\n',
+    ];
+    let index = 0;
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: {
+        getReader: () => ({
+          read: async () =>
+            index < chunks.length
+              ? { value: encoder.encode(chunks[index++]), done: false }
+              : { value: undefined, done: true },
+          releaseLock: () => {},
+        }),
+      },
+    } as unknown as Response);
+
+    const client = new ApiClient('http://api.test/v1');
+    client.setCsrfToken('token-1');
+    const tokens: string[] = [];
+    let finalMessage: unknown;
+
+    await client.streamAnswer(
+      '/conversations/1/messages/stream',
+      { question: 'q' },
+      { onToken: (text) => tokens.push(text), onDone: (message) => { finalMessage = message; } },
+    );
+
+    expect(tokens).toEqual(['Revenue ', 'grew 42 percent. [S1]']);
+    expect(finalMessage).toEqual({ id: 'm1', role: 'ASSISTANT' });
+    expect(headerOf(fetchMock.mock.calls[0][1], 'Accept')).toBe('text/event-stream');
+    expect(headerOf(fetchMock.mock.calls[0][1], 'X-XSRF-TOKEN')).toBe('token-1');
+  });
+
+  it('surfaces the message from a stream error event', async () => {
+    const encoder = new TextEncoder();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: {
+        getReader: () => {
+          let sent = false;
+          return {
+            read: async () => {
+              if (sent) return { value: undefined, done: true };
+              sent = true;
+              return {
+                value: encoder.encode('event:error\ndata:{"message":"The AI service is busy."}\n\n'),
+                done: false,
+              };
+            },
+            releaseLock: () => {},
+          };
+        },
+      },
+    } as unknown as Response);
+
+    const client = new ApiClient('http://api.test/v1');
+    client.setCsrfToken('token-1');
+
+    await expect(
+      client.streamAnswer('/stream', {}, { onToken: () => {}, onDone: () => {} }),
+    ).rejects.toThrow('The AI service is busy.');
+  });
+
   it('resolves undefined for 204 responses', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { token: 'token-1' }))

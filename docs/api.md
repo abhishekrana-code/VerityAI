@@ -117,6 +117,7 @@ Behavior guarantees:
 | DELETE | `/conversations/{id}` | Delete conversation (cascades messages/citations) |
 | GET | `/conversations/{id}/messages` | Paginated message history (`page`, `size`), each message with its `citations[]` |
 | POST | `/conversations/{id}/messages` | Ask a question — RAG over the conversation's documents (rate-limited AI request) |
+| POST | `/conversations/{id}/messages/stream` | Same question, streamed as `text/event-stream` (`token`, `done`, `error` events) |
 
 **Asking a question** — `POST /conversations/{id}/messages`:
 
@@ -147,6 +148,27 @@ Citations are only attached for text the model actually cited (`[Sn]` →
 instructs the model to compare sources explicitly and to report disagreements
 with both citations instead of blending them. Evidence text is labeled as
 quoted data that must never be followed as instructions.
+
+**Streaming an answer** — `POST /conversations/{id}/messages/stream` takes the
+same request body and returns `text/event-stream`:
+
+```
+event:token
+data: {"text":"Revenue grew "}
+
+event:token
+data: {"text":"42 percent. [S1]"}
+
+event:done
+data: {"id":"…","role":"ASSISTANT","content":"Revenue grew 42 percent. [S1]","citations":[…]}
+```
+
+The `done` payload is exactly the response of the non-streaming endpoint, and
+the message is committed before it is sent, so a reload shows the same answer.
+On failure the stored message is `FAILED` and an `error` event carries its
+message. Setup is synchronous: auth, ownership, rate limiting and document
+scope are checked before the first token, so a bad request fails with an
+ordinary error response rather than a 200 stream.
 
 ---
 

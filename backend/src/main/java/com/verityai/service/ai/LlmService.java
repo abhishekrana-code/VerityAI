@@ -8,6 +8,14 @@ import java.util.UUID;
 public interface LlmService {
     ChatResponse generate(ChatRequest request);
 
+    /**
+     * Same request as {@link #generate}, but each content delta is passed to
+     * {@code onDelta} as it arrives. The returned response has the full text,
+     * usage and citations, so callers persist exactly what they would have from
+     * a non-streaming call.
+     */
+    ChatResponse stream(ChatRequest request, java.util.function.Consumer<String> onDelta);
+
     /** Plain completion used for document summaries (no RAG prompt, no citations). */
     CompletionResponse complete(CompletionRequest request);
 

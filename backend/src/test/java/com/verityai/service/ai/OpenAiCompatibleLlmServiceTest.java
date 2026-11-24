@@ -1,12 +1,18 @@
 package com.verityai.service.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import com.verityai.entity.Document;
 import com.verityai.entity.DocumentChunk;
 import com.verityai.service.retrieval.RetrievalService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -139,6 +145,65 @@ class OpenAiCompatibleLlmServiceTest {
             .doesNotContain("spans 2 documents")
             .doesNotContain("report the disagreement");
         assertThat(prompt).contains("Source [S1]").contains("Source [S2]");
+    }
+
+    // -----------------------------------------------------------------------
+    // Streaming
+    // -----------------------------------------------------------------------
+
+    @Test
+    void streamConcatenatesDeltasAndReadsUsageFromTheFinalChunk() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/chat", exchange -> {
+            String body = String.join("\n",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Revenue \"}}]}",
+                "",
+                "data: {\"choices\":[{\"delta\":{\"content\":\"grew 42 percent. [S1]\"}}]}",
+                "",
+                "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":120,\"completion_tokens\":8}}",
+                "",
+                "data: [DONE]",
+                "");
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(bytes);
+            }
+        });
+        server.start();
+        try {
+            OpenAiCompatibleLlmService streaming = new OpenAiCompatibleLlmService(new ObjectMapper());
+            ReflectionTestUtils.setField(streaming, "apiKey", "test-key");
+            ReflectionTestUtils.setField(streaming, "apiUrl",
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/chat");
+            ReflectionTestUtils.setField(streaming, "model", "fallback-model");
+            ReflectionTestUtils.setField(streaming, "connectTimeoutMs", 5000);
+            ReflectionTestUtils.setField(streaming, "readTimeoutMs", 5000);
+            streaming.init();
+
+            List<String> deltas = new ArrayList<>();
+            LlmService.ChatResponse response = streaming.stream(
+                new LlmService.ChatRequest("What was revenue growth?", List.of(), "test-model", 100),
+                deltas::add);
+
+            assertThat(deltas).containsExactly("Revenue ", "grew 42 percent. [S1]");
+            assertThat(response.content()).isEqualTo("Revenue grew 42 percent. [S1]");
+            assertThat(response.citedIndices()).containsExactly(0);
+            assertThat(response.promptTokens()).isEqualTo(120);
+            assertThat(response.completionTokens()).isEqualTo(8);
+            assertThat(response.model()).isEqualTo("test-model");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void nonStreamingRequestBodyOmitsStreamingFields() throws Exception {
+        String body = new ObjectMapper().writeValueAsString(
+            new OpenAiCompatibleLlmService.ProviderRequest("m", List.of(), 10, 0.1, 1.0, null, null));
+
+        assertThat(body).doesNotContain("stream");
     }
 
     @Test

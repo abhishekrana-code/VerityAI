@@ -285,6 +285,7 @@ cookie echoed back as an `X-XSRF-TOKEN` header.
 | GET/POST | `/conversations` | List / create |
 | GET/PATCH/DELETE | `/conversations/{id}` | Detail, rename/archive, edit document context, delete |
 | GET/POST | `/conversations/{id}/messages` | Read history / ask a question (RAG + citations) |
+| POST | `/conversations/{id}/messages/stream` | Ask a question over SSE: tokens while it writes, then the stored message |
 | GET/POST | `/conversations/{id}/messages/{messageId}/verify` | Read stored claim verification / run it (bounded model call) |
 | POST | `/search` | Hybrid semantic + keyword search over your documents |
 | GET | `/knowledge-graph/entities` | Merged entity index (library or one document), filters `type`, `q`, `limit` |

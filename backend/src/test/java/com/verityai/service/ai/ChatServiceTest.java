@@ -19,16 +19,21 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,6 +54,7 @@ class ChatServiceTest {
     @Mock private MessageRepository messageRepository;
     @Mock private MessageCitationRepository citationRepository;
     @Mock private ConversationRepository conversationRepository;
+    @Mock private PlatformTransactionManager transactionManager;
 
     private ChatService chatService;
     private User owner;
@@ -57,9 +63,12 @@ class ChatServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Not every test reaches prepare(), so this stub is optional.
+        lenient().when(transactionManager.getTransaction(any()))
+            .thenReturn(new SimpleTransactionStatus());
         chatService = new ChatService(
             retrievalService, llmService, documentRepository,
-            messageRepository, citationRepository, conversationRepository);
+            messageRepository, citationRepository, conversationRepository, transactionManager);
 
         owner = new User();
         owner.setId(UUID.randomUUID());
@@ -223,6 +232,51 @@ class ChatServiceTest {
 
         assertThat(resp.getEvidenceStatus()).isEqualTo(MessageResponse.EvidenceStatus.NONE);
         verify(retrievalService).retrieve(owner.getId(), QUESTION, List.of(document.getId()));
+    }
+
+    @Test
+    void streamAsk_forwardsDeltasAndPersistsTheSameResultAsAsk() {
+        RetrievalService.RetrievedChunk evidence = chunk("Revenue grew 14 percent.", 1);
+        when(retrievalService.retrieve(owner.getId(), QUESTION, null)).thenReturn(List.of(evidence));
+        when(llmService.stream(any(), any())).thenAnswer(invocation -> {
+            Consumer<String> onDelta = invocation.getArgument(1);
+            onDelta.accept("Revenue grew ");
+            onDelta.accept("14 percent. [S1]");
+            return new LlmService.ChatResponse(
+                "Revenue grew 14 percent. [S1]", 100, 40, 850, "test-model", List.of(0));
+        });
+
+        List<String> deltas = new ArrayList<>();
+        MessageResponse resp = chatService.streamAsk(conversation, QUESTION, null, deltas::add);
+
+        assertThat(deltas).containsExactly("Revenue grew ", "14 percent. [S1]");
+        assertThat(resp.getEvidenceStatus()).isEqualTo(MessageResponse.EvidenceStatus.SUFFICIENT);
+        assertThat(resp.getCitations()).hasSize(1);
+        assertThat(resp.getCitations().get(0).getDocumentName()).isEqualTo("report.pdf");
+        verify(messageRepository, times(2)).save(any());
+        verify(conversationRepository).touch(eq(conversation.getId()), any(Instant.class));
+    }
+
+    @Test
+    void streamAsk_whenTheStreamFails_savesFailedMessageAndThrows() {
+        when(retrievalService.retrieve(owner.getId(), QUESTION, null)).thenReturn(List.of());
+        when(llmService.stream(any(), any())).thenThrow(new RuntimeException("provider down"));
+
+        assertThatThrownBy(() -> chatService.streamAsk(conversation, QUESTION, null, delta -> { }))
+            .isInstanceOf(ApiException.class);
+
+        ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(1).getStatus()).isEqualTo(Message.MessageStatus.FAILED);
+        verify(conversationRepository, never()).touch(any(), any());
+    }
+
+    @Test
+    void streamAsk_isNotTransactionalSoNoConnectionIsHeldDuringTheStream() throws NoSuchMethodException {
+        assertThat(ChatService.class
+            .getMethod("streamAsk", Conversation.class, String.class, List.class, Consumer.class)
+            .getAnnotation(Transactional.class))
+            .isNull();
     }
 
     @Test
