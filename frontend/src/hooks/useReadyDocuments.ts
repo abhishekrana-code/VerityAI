@@ -14,6 +14,11 @@ function isProcessing(doc: Document) {
   return doc.status === 'UPLOADED' || doc.status === 'PROCESSING';
 }
 
+/** Short label for a document that is still on its way to READY. */
+export function pendingStatusLabel(status: Document['status']): string {
+  return status === 'UPLOADED' ? 'Queued' : 'Processing';
+}
+
 /**
  * Ready documents for the Ask composer.
  *
@@ -21,19 +26,20 @@ function isProcessing(doc: Document) {
  * that refetch can cache an empty ready list for the whole stale window (five
  * minutes). The scan below polls the newest documents while any is pending and
  * refreshes the ready list whenever that queue changes — including when it
- * empties — so the composer unlocks without a reload.
+ * empties — so the composer unlocks without a reload. The pending documents
+ * are returned too, so callers can show them instead of an empty state.
  */
 export function useReadyDocuments() {
   const queryClient = useQueryClient();
   type DocumentPage = { content: Document[] };
 
-  const { data: pendingCount = 0 } = useQuery({
+  const { data: processing = [] } = useQuery({
     queryKey: PENDING_SCAN_QUERY_KEY,
     queryFn: async () => {
       const recent = await api.get<DocumentPage>(`/documents?size=${RECENT_WINDOW}`);
-      return recent.content.filter(isProcessing).length;
+      return recent.content.filter(isProcessing);
     },
-    refetchInterval: (query) => ((query.state.data ?? 0) > 0 ? POLL_MS : false),
+    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? POLL_MS : false),
   });
 
   const ready = useQuery({
@@ -46,7 +52,7 @@ export function useReadyDocuments() {
   // (including reaching zero) is exactly when a refetch can show something new.
   useEffect(() => {
     void queryClient.invalidateQueries({ queryKey: READY_DOCUMENTS_QUERY_KEY });
-  }, [pendingCount, queryClient]);
+  }, [processing.length, queryClient]);
 
-  return ready;
+  return { documents: ready.data, processing };
 }

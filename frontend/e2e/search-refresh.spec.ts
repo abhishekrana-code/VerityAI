@@ -45,16 +45,24 @@ test.describe('search scope refresh', () => {
 
     await expect(page.getByRole('heading', { name: 'Search your library' })).toBeVisible();
     await page.getByRole('button', { name: 'All documents' }).click();
-    await expect(page.getByText(/No processed documents yet/)).toBeVisible();
+
+    // The pending document is listed with its status, not an empty hint.
+    const pendingRow = page.getByRole('checkbox', {
+      name: new RegExp(`^${filename.replaceAll('.', '\\.')} \\((Processing|Queued)\\)$`),
+    });
+    await expect(pendingRow).toBeDisabled();
+    await expect(page.getByText(/No processed documents yet/)).toHaveCount(0);
 
     // Only a client-side refresh preserves this marker; a reload would clear it.
     await page.evaluate(() => {
       (window as unknown as { __noReloadMarker?: string }).__noReloadMarker = 'kept';
     });
 
-    await expect(page.locator('label').filter({ hasText: filename })).toBeVisible({
-      timeout: 60_000,
-    });
+    // Once processing finishes, the row becomes selectable in place.
+    const readyRow = page.locator('label').filter({ hasText: filename });
+    await expect(readyRow).toBeVisible({ timeout: 60_000 });
+    await expect(readyRow.getByRole('checkbox')).toBeEnabled();
+    await expect(pendingRow).toHaveCount(0);
     expect(
       await page.evaluate(
         () => (window as unknown as { __noReloadMarker?: string }).__noReloadMarker,

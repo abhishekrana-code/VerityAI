@@ -15,7 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
 import { UploadDropzone } from '@/components/UploadDropzone';
-import { useReadyDocuments } from '@/hooks/useReadyDocuments';
+import { pendingStatusLabel, useReadyDocuments } from '@/hooks/useReadyDocuments';
 
 interface AskResult {
   conversation: Conversation;
@@ -45,7 +45,7 @@ export function WorkspacePage() {
     placeholderData: (prev) => prev,
   });
 
-  const { data: documents } = useReadyDocuments();
+  const { documents, processing } = useReadyDocuments();
 
   /**
    * Asking creates the conversation implicitly, so the user never names one
@@ -160,11 +160,28 @@ export function WorkspacePage() {
                   Answers draw evidence only from these documents.
                 </p>
                 <div className="max-h-56 space-y-1 overflow-y-auto">
-                  {readyCount === 0 && (
+                  {readyCount === 0 && processing.length === 0 && (
                     <p className="py-1 text-sm text-muted-foreground">
                       No ready documents yet — upload a PDF first.
                     </p>
                   )}
+                  {processing.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center gap-2 py-1 text-sm text-muted-foreground"
+                    >
+                      <input
+                        type="checkbox"
+                        disabled
+                        aria-label={`${doc.originalFilename} (${pendingStatusLabel(doc.status)})`}
+                        className="rounded border-input"
+                      />
+                      <span className="truncate">{doc.originalFilename}</span>
+                      <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px]">
+                        {pendingStatusLabel(doc.status)}
+                      </span>
+                    </div>
+                  ))}
                   {documents?.map((doc) => (
                     <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-sm">
                       <input
@@ -211,15 +228,23 @@ export function WorkspacePage() {
             Ask
           </button>
         </div>
-        {readyCount === 0 && (
-          <p className="text-sm text-muted-foreground">
-            <Sparkles className="mr-1 inline h-4 w-4 text-primary" aria-hidden="true" />
-            Upload a PDF to ask your first question.{' '}
-            <Link to="/dashboard/documents" className="text-primary hover:underline">
-              Go to the library
-            </Link>
-          </p>
-        )}
+        {readyCount === 0 &&
+          (processing.length > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              <Loader2 className="mr-1 inline h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+              {processing.length === 1
+                ? `${processing[0].originalFilename} is ${pendingStatusLabel(processing[0].status).toLowerCase()} — asking unlocks when it is ready.`
+                : `${pluralize(processing.length, 'document')} are processing — asking unlocks as they become ready.`}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              <Sparkles className="mr-1 inline h-4 w-4 text-primary" aria-hidden="true" />
+              Upload a PDF to ask your first question.{' '}
+              <Link to="/dashboard/documents" className="text-primary hover:underline">
+                Go to the library
+              </Link>
+            </p>
+          ))}
       </section>
 
       {/* Reuse the one upload surface so a PDF can be added without leaving Ask */}

@@ -69,8 +69,9 @@ describe('useReadyDocuments', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    // The upload is still processing, so the composer starts empty.
-    expect(result.current.data).toEqual([]);
+    // The upload is still processing: no ready documents, but it is visible.
+    expect(result.current.documents).toEqual([]);
+    expect(result.current.processing.map((doc) => doc.status)).toEqual(['PROCESSING']);
     expect(get).toHaveBeenCalledWith('/documents?size=100&status=READY');
 
     processing = false;
@@ -82,7 +83,8 @@ describe('useReadyDocuments', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].originalFilename).toBe('annual-report.pdf');
+    expect(result.current.documents).toHaveLength(1);
+    expect(result.current.documents?.[0].originalFilename).toBe('annual-report.pdf');
+    expect(result.current.processing).toEqual([]);
   });
 });
