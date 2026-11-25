@@ -206,28 +206,24 @@ export function WorkspacePage() {
             Ask
           </button>
         </div>
-        {readyCount === 0 &&
-          (documentsLoading && processing.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="mr-1 inline h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-              Loading your documents…
-            </p>
-          ) : processing.length > 0 ? (
-            <p className="text-sm text-muted-foreground">
-              <Loader2 className="mr-1 inline h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-              {processing.length === 1
-                ? `${processing[0].originalFilename} is ${pendingStatusLabel(processing[0].status).toLowerCase()} — asking unlocks when it is ready.`
-                : `${pluralize(processing.length, 'document')} are processing — asking unlocks as they become ready.`}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              <Sparkles className="mr-1 inline h-4 w-4 text-primary" aria-hidden="true" />
-              Upload a PDF to ask your first question.{' '}
-              <Link to="/dashboard/documents" className="text-primary hover:underline">
-                Go to the library
-              </Link>
-            </p>
-          ))}
+        {readyCount === 0 && processing.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            <Loader2 className="mr-1 inline h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+            {processing.length === 1
+              ? `${processing[0].originalFilename} is ${pendingStatusLabel(processing[0].status).toLowerCase()} — asking unlocks when it is ready.`
+              : `${pluralize(processing.length, 'document')} are processing — asking unlocks as they become ready.`}
+          </p>
+        )}
+        {/* Until the list resolves there is nothing true to say, so say nothing. */}
+        {readyCount === 0 && processing.length === 0 && !documentsLoading && (
+          <p className="text-sm text-muted-foreground">
+            <Sparkles className="mr-1 inline h-4 w-4 text-primary" aria-hidden="true" />
+            Upload a PDF to ask your first question.{' '}
+            <Link to="/dashboard/documents" className="text-primary hover:underline">
+              Go to the library
+            </Link>
+          </p>
+        )}
       </section>
 
       {/* Reuse the one upload surface so a PDF can be added without leaving Ask */}

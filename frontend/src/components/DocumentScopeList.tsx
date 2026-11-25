@@ -11,7 +11,7 @@ interface DocumentScopeListProps {
   selectedIds: string[];
   onToggle: (id: string) => void;
   /** The lists have not resolved yet, so "no documents" would be a guess. */
-  loading?: boolean;
+  loading: boolean;
   /** Show page counts, as the Search picker does. */
   showPageCount?: boolean;
 }
@@ -27,7 +27,7 @@ export function DocumentScopeList({
   processing,
   selectedIds,
   onToggle,
-  loading = false,
+  loading,
   showPageCount = false,
 }: DocumentScopeListProps) {
   if (loading) {
