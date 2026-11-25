@@ -21,6 +21,9 @@ const env = {
 };
 
 const npm = isWindows ? 'npm.cmd' : 'npm';
+// Stay in Playwright's process group on POSIX: it stops webServers with
+// `kill(-pid)`, and a detached Vite child would survive that kill, hold the
+// inherited stdout pipe open, and leave the runner waiting forever.
 const child = spawn(
   npm,
   ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5174', '--strictPort'],
@@ -29,7 +32,6 @@ const child = spawn(
     env,
     stdio: 'inherit',
     shell: isWindows,
-    detached: !isWindows,
   },
 );
 
@@ -44,11 +46,7 @@ function stop(code = 0) {
         shell: true,
       });
     } else {
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
+      child.kill('SIGTERM');
     }
   }
   setTimeout(() => process.exit(code), 500);

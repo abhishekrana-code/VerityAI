@@ -10,6 +10,9 @@ import net from 'node:net';
  * Stopping the JVM that owns the E2E API port here closes the pipe, so the run
  * actually ends. Only a java.exe listener is touched, so a developer server or
  * any other non-E2E process on that port is left alone.
+ *
+ * POSIX needs no equivalent: start-backend.mjs keeps the JVM in the wrapper's
+ * process group, so Playwright's own group kill reaches it.
  */
 function listeningPids(port: number): string[] {
   const pids = new Set<string>();

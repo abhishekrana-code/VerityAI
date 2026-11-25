@@ -135,6 +135,12 @@ const mavenArgs = [
 // shell (`shell: true`), which is awkward to interrupt and quotes paths badly
 // under Git Bash. The POSIX wrapper script works everywhere bash exists, so use
 // it directly on Windows too; CI runs on Linux and execs it as-is.
+//
+// Never detach on POSIX: Playwright starts webServers as process-group leaders
+// and stops them with `kill(-pid)`, so a detached JVM would survive that kill,
+// keep the inherited stdout pipe open, and leave the runner waiting forever.
+// `mvnw` execs the JVM, so the child is the backend itself and a direct signal
+// stops it; on Windows `taskkill /T` walks the tree instead.
 const child = isWindows
   ? spawn('bash', ['-c', `./mvnw ${mavenArgs.join(' ')}`], {
       cwd: backendDir,
@@ -146,7 +152,6 @@ const child = isWindows
       cwd: backendDir,
       env,
       stdio: 'inherit',
-      detached: true,
     });
 
 let stopping = false;
@@ -160,11 +165,7 @@ function stop(code = 0) {
         shell: true,
       });
     } else {
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
+      child.kill('SIGTERM');
     }
   }
   setTimeout(() => process.exit(code), 500);
@@ -173,15 +174,16 @@ function stop(code = 0) {
 process.on('SIGINT', () => stop(0));
 process.on('SIGTERM', () => stop(0));
 
-// If this wrapper exits without an explicit signal (Playwright may kill only the
-// wrapper), take the JVM with it instead of leaving port 8081 orphaned.
+// If this wrapper exits on its own, take the backend with it instead of leaving
+// port 8081 orphaned. Playwright's group kill covers the case where the wrapper
+// is force-killed.
 process.on('exit', () => {
   try {
     if (!child.pid) return;
     if (isWindows) {
       spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
     } else {
-      process.kill(-child.pid, 'SIGTERM');
+      child.kill('SIGTERM');
     }
   } catch {
     // Nothing left to clean up.
