@@ -134,17 +134,14 @@ export function SearchPage() {
 
           {scopeOpen && (
             <div className="max-h-56 overflow-y-auto rounded-xl border border-border/80 bg-card/80 p-2">
-              {!documents ? (
-                <p className="p-3 text-xs text-muted-foreground">Loading documents…</p>
-              ) : (
-                <DocumentScopeList
-                  ready={documents}
-                  processing={processing}
-                  selectedIds={selectedDocs}
-                  onToggle={toggleDocument}
-                  showPageCount
-                />
-              )}
+              <DocumentScopeList
+                ready={documents ?? []}
+                processing={processing}
+                selectedIds={selectedDocs}
+                onToggle={toggleDocument}
+                loading={!documents}
+                showPageCount
+              />
             </div>
           )}
         </form>

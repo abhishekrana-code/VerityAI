@@ -54,5 +54,5 @@ export function useReadyDocuments() {
     void queryClient.invalidateQueries({ queryKey: READY_DOCUMENTS_QUERY_KEY });
   }, [processing.length, queryClient]);
 
-  return { documents: ready.data, processing };
+  return { documents: ready.data, processing, isLoading: ready.isPending };
 }

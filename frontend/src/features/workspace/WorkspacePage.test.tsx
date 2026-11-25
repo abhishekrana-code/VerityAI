@@ -66,4 +66,22 @@ describe('WorkspacePage composer', () => {
     expect(screen.getByRole('checkbox', { name: 'annual-report.pdf (Processing)' })).toBeDisabled();
     expect(screen.queryByText('No ready documents yet — upload a PDF first.')).not.toBeInTheDocument();
   });
+
+  it('waits for the documents query instead of claiming the library is empty', async () => {
+    get.mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/conversations')) return Promise.resolve(page([]));
+      return new Promise<never>(() => {});
+    });
+
+    renderWithProviders(<WorkspacePage />);
+
+    expect(await screen.findByRole('button', { name: 'Loading documents…' })).toBeInTheDocument();
+    expect(screen.queryByText(/Upload a PDF to ask your first question/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/All ready documents/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Loading documents…' }));
+
+    expect(screen.getAllByText('Loading documents…')).toHaveLength(2);
+    expect(screen.queryByText('No ready documents yet — upload a PDF first.')).not.toBeInTheDocument();
+  });
 });

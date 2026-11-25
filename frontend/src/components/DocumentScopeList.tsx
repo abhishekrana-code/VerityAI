@@ -10,6 +10,8 @@ interface DocumentScopeListProps {
   processing: Document[];
   selectedIds: string[];
   onToggle: (id: string) => void;
+  /** The lists have not resolved yet, so "no documents" would be a guess. */
+  loading?: boolean;
   /** Show page counts, as the Search picker does. */
   showPageCount?: boolean;
 }
@@ -25,8 +27,15 @@ export function DocumentScopeList({
   processing,
   selectedIds,
   onToggle,
+  loading = false,
   showPageCount = false,
 }: DocumentScopeListProps) {
+  if (loading) {
+    return (
+      <p className="px-2 py-1 text-sm text-muted-foreground">Loading documents…</p>
+    );
+  }
+
   if (ready.length === 0 && processing.length === 0) {
     return (
       <p className="px-2 py-1 text-sm text-muted-foreground">

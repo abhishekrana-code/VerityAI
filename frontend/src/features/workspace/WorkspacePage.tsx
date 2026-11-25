@@ -46,7 +46,7 @@ export function WorkspacePage() {
     placeholderData: (prev) => prev,
   });
 
-  const { documents, processing } = useReadyDocuments();
+  const { documents, processing, isLoading: documentsLoading } = useReadyDocuments();
 
   /**
    * Asking creates the conversation implicitly, so the user never names one
@@ -97,6 +97,11 @@ export function WorkspacePage() {
   const readyCount = documents?.length ?? 0;
   const selectedDocuments = documents?.filter((d) => scopeIds.includes(d.id)) ?? [];
   const canAsk = question.trim().length > 0 && readyCount > 0 && !askMutation.isPending;
+  const scopeLabel = documentsLoading
+    ? 'Loading documents…'
+    : selectedDocuments.length === 0
+      ? `All ready documents (${readyCount})`
+      : `${pluralize(selectedDocuments.length, 'document')} selected`;
 
   const submit = () => {
     const text = question.trim();
@@ -146,9 +151,7 @@ export function WorkspacePage() {
               className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-accent"
             >
               <FileText className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              {selectedDocuments.length === 0
-                ? `All ready documents (${readyCount})`
-                : `${pluralize(selectedDocuments.length, 'document')} selected`}
+              {scopeLabel}
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             </button>
             {scopeOpen && (
@@ -166,6 +169,7 @@ export function WorkspacePage() {
                     processing={processing}
                     selectedIds={scopeIds}
                     onToggle={toggleScope}
+                    loading={documentsLoading}
                   />
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
@@ -203,7 +207,12 @@ export function WorkspacePage() {
           </button>
         </div>
         {readyCount === 0 &&
-          (processing.length > 0 ? (
+          (documentsLoading && processing.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              <Loader2 className="mr-1 inline h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+              Loading your documents…
+            </p>
+          ) : processing.length > 0 ? (
             <p className="text-sm text-muted-foreground">
               <Loader2 className="mr-1 inline h-4 w-4 animate-spin text-primary" aria-hidden="true" />
               {processing.length === 1
