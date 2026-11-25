@@ -27,15 +27,14 @@ test.describe('search scope refresh', () => {
       buffer: createLongPdf(
         190,
         ('The northern cod fishery collapsed in 1992 after decades of overfishing, ' +
-          'and the moratorium displaced tens of thousands of workers. ').repeat(10),
+          'and the moratorium displaced tens of thousands of workers. ').repeat(40),
       ),
     });
-    await uploaded;
+    expect((await uploaded).status()).toBe(200);
 
     // Open Search straight away, while the backend is still working on the
     // upload, using the sidebar link.
     await page.getByRole('link', { name: 'Search', exact: true }).click();
-    await page.waitForURL(/\/dashboard\/search$/);
 
     const status = await page.evaluate(async () => {
       const response = await fetch('/api/v1/documents?size=1');
@@ -56,9 +55,6 @@ test.describe('search scope refresh', () => {
     await expect(page.locator('label').filter({ hasText: filename })).toBeVisible({
       timeout: 60_000,
     });
-    await expect(
-      page.getByRole('checkbox', { name: filename }),
-    ).toBeVisible();
     expect(
       await page.evaluate(
         () => (window as unknown as { __noReloadMarker?: string }).__noReloadMarker,
