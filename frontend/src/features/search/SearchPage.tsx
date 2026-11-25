@@ -10,12 +10,13 @@ import {
   type SearchStrategy,
 } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
-import { cn, pluralize } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
+import { DocumentScopeList } from '@/components/DocumentScopeList';
 import { PageEmpty, PageError, PageLoading } from '@/components/ui/PageStates';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
-import { pendingStatusLabel, useReadyDocuments } from '@/hooks/useReadyDocuments';
+import { useReadyDocuments } from '@/hooks/useReadyDocuments';
 import {
   ArrowUpRight, FileText, Filter, Loader2, Search, Sparkles, X,
 } from 'lucide-react';
@@ -134,47 +135,13 @@ export function SearchPage() {
               {!documents ? (
                 <p className="p-3 text-xs text-muted-foreground">Loading documents…</p>
               ) : (
-                <>
-                  {documents.length === 0 && processing.length === 0 && (
-                    <p className="p-3 text-xs text-muted-foreground">No processed documents yet. Upload and process a PDF first.</p>
-                  )}
-                  <ul className="space-y-1">
-                    {documents.map((document) => (
-                      <li key={document.id}>
-                        <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-accent/70">
-                          <input
-                            type="checkbox"
-                            checked={selectedDocs.includes(document.id)}
-                            onChange={() => toggleDocument(document.id)}
-                            className="rounded border-input"
-                          />
-                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                          <span className="min-w-0 flex-1 truncate">{document.originalFilename}</span>
-                          {document.pageCount != null && (
-                            <span className="text-[11px] text-muted-foreground">{pluralize(document.pageCount, 'page')}</span>
-                          )}
-                        </label>
-                      </li>
-                    ))}
-                    {processing.map((document) => (
-                      <li key={document.id}>
-                        <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            disabled
-                            aria-label={`${document.originalFilename} (${pendingStatusLabel(document.status)})`}
-                            className="rounded border-input"
-                          />
-                          <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="min-w-0 flex-1 truncate">{document.originalFilename}</span>
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
-                            {pendingStatusLabel(document.status)}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                <DocumentScopeList
+                  ready={documents}
+                  processing={processing}
+                  selectedIds={selectedDocs}
+                  onToggle={toggleDocument}
+                  showPageCount
+                />
               )}
             </div>
           )}

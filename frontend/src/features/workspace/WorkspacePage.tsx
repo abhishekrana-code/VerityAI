@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
 import { UploadDropzone } from '@/components/UploadDropzone';
+import { DocumentScopeList } from '@/components/DocumentScopeList';
 import { pendingStatusLabel, useReadyDocuments } from '@/hooks/useReadyDocuments';
 
 interface AskResult {
@@ -159,40 +160,13 @@ export function WorkspacePage() {
                 <p className="mb-2 text-xs text-muted-foreground">
                   Answers draw evidence only from these documents.
                 </p>
-                <div className="max-h-56 space-y-1 overflow-y-auto">
-                  {readyCount === 0 && processing.length === 0 && (
-                    <p className="py-1 text-sm text-muted-foreground">
-                      No ready documents yet — upload a PDF first.
-                    </p>
-                  )}
-                  {processing.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center gap-2 py-1 text-sm text-muted-foreground"
-                    >
-                      <input
-                        type="checkbox"
-                        disabled
-                        aria-label={`${doc.originalFilename} (${pendingStatusLabel(doc.status)})`}
-                        className="rounded border-input"
-                      />
-                      <span className="truncate">{doc.originalFilename}</span>
-                      <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px]">
-                        {pendingStatusLabel(doc.status)}
-                      </span>
-                    </div>
-                  ))}
-                  {documents?.map((doc) => (
-                    <label key={doc.id} className="flex cursor-pointer items-center gap-2 py-1 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={scopeIds.includes(doc.id)}
-                        onChange={() => toggleScope(doc.id)}
-                        className="rounded border-input"
-                      />
-                      <span className="truncate">{doc.originalFilename}</span>
-                    </label>
-                  ))}
+                <div className="max-h-56 overflow-y-auto">
+                  <DocumentScopeList
+                    ready={documents ?? []}
+                    processing={processing}
+                    selectedIds={scopeIds}
+                    onToggle={toggleScope}
+                  />
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
                   <button
