@@ -10,7 +10,7 @@ import {
   type SearchStrategy,
 } from '@/lib/api';
 import { errorToast } from '@/lib/errors';
-import { cn } from '@/lib/utils';
+import { cn, pluralize } from '@/lib/utils';
 import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewModal';
 import { DocumentScopeList } from '@/components/DocumentScopeList';
 import { PageEmpty, PageError, PageLoading } from '@/components/ui/PageStates';
@@ -114,7 +114,9 @@ export function SearchPage() {
               aria-expanded={scopeOpen}
             >
               <Filter className="h-3.5 w-3.5" aria-hidden="true" />
-              {selectedDocs.length === 0 ? 'All documents' : `${selectedDocs.length} document${selectedDocs.length > 1 ? 's' : ''} selected`}
+              {selectedDocs.length === 0
+                ? 'All documents'
+                : `${pluralize(selectedDocs.length, 'document')} selected`}
             </button>
             {selectedDocs.length > 0 && (
               <button
@@ -163,7 +165,7 @@ export function SearchPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold">
-                {result.count} result{result.count === 1 ? '' : 's'} for “{result.query}”
+                {pluralize(result.count, 'result')} for “{result.query}”
               </h2>
               {strategy && (
                 <span className={cn('inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold', strategy.className)}>

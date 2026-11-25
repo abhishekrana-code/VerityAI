@@ -8,8 +8,8 @@ interface DocumentScopeListProps {
   ready: Document[];
   /** Documents still being processed; shown but not selectable. */
   processing: Document[];
-  selectedIds?: string[];
-  onToggle?: (id: string) => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
   /** Show page counts, as the Search picker does. */
   showPageCount?: boolean;
 }
@@ -23,7 +23,7 @@ interface DocumentScopeListProps {
 export function DocumentScopeList({
   ready,
   processing,
-  selectedIds = [],
+  selectedIds,
   onToggle,
   showPageCount = false,
 }: DocumentScopeListProps) {
@@ -43,7 +43,7 @@ export function DocumentScopeList({
             <input
               type="checkbox"
               checked={selectedIds.includes(document.id)}
-              onChange={() => onToggle?.(document.id)}
+              onChange={() => onToggle(document.id)}
               className="rounded border-input"
             />
             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -56,23 +56,24 @@ export function DocumentScopeList({
           </label>
         </li>
       ))}
-      {processing.map((document) => (
-        <li key={document.id}>
-          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              disabled
-              aria-label={`${document.originalFilename} (${pendingStatusLabel(document.status)})`}
-              className="rounded border-input"
-            />
-            <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">{document.originalFilename}</span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
-              {pendingStatusLabel(document.status)}
-            </span>
-          </div>
-        </li>
-      ))}
+      {processing.map((document) => {
+        const status = pendingStatusLabel(document.status);
+        return (
+          <li key={document.id}>
+            <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                disabled
+                aria-label={`${document.originalFilename} (${status})`}
+                className="rounded border-input"
+              />
+              <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate">{document.originalFilename}</span>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">{status}</span>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
