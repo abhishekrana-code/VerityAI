@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Conversation, type ConversationListResponse, type Document, type Message } from '@/lib/api';
+import { api, type Conversation, type ConversationListResponse, type Message } from '@/lib/api';
 import { createConversation, deriveConversationTitle } from '@/lib/conversation';
 import { errorToast } from '@/lib/errors';
 import {
@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
 import { UploadDropzone } from '@/components/UploadDropzone';
+import { useReadyDocuments } from '@/hooks/useReadyDocuments';
 
 interface AskResult {
   conversation: Conversation;
@@ -44,11 +45,7 @@ export function WorkspacePage() {
     placeholderData: (prev) => prev,
   });
 
-  const { data: documents } = useQuery({
-    queryKey: ['documents', 'ready'],
-    queryFn: () => api.get<{ content: Document[] }>('/documents?size=100&status=READY'),
-    select: (data) => data.content,
-  });
+  const { data: documents } = useReadyDocuments();
 
   /**
    * Asking creates the conversation implicitly, so the user never names one
