@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { api, type Document } from '@/lib/api';
 import { renderWithProviders } from '@/test/renderWithProviders';
@@ -85,10 +85,15 @@ describe('WorkspacePage composer', () => {
     expect(screen.queryByText('No ready documents yet — upload a PDF first.')).not.toBeInTheDocument();
   });
 
-  it('offers a retry instead of an empty library when the documents request fails', async () => {
+  it('restores the document rows when a failed request is retried', async () => {
+    let readyFails = true;
     get.mockImplementation((endpoint: string) => {
       if (endpoint.startsWith('/conversations')) return Promise.resolve(page([]));
-      if (endpoint.includes('status=READY')) return Promise.reject(new Error('documents unavailable'));
+      if (endpoint.includes('status=READY')) {
+        return readyFails
+          ? Promise.reject(new Error('documents unavailable'))
+          : Promise.resolve(page([document('READY')]));
+      }
       if (endpoint.startsWith('/documents?size=10')) return Promise.resolve(page([]));
       return Promise.reject(new Error(`unexpected GET ${endpoint}`));
     });
@@ -105,10 +110,14 @@ describe('WorkspacePage composer', () => {
     expect(screen.getByText(/load your documents/)).toBeInTheDocument();
     expect(screen.queryByText('No ready documents yet — upload a PDF first.')).not.toBeInTheDocument();
 
-    const readyRequests = () =>
-      get.mock.calls.filter(([endpoint]) => endpoint.includes('status=READY')).length;
-    const before = readyRequests();
+    readyFails = false;
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await waitFor(() => expect(readyRequests()).toBeGreaterThan(before));
+
+    expect(
+      await screen.findByRole('button', { name: 'All ready documents (1)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'annual-report.pdf' })).toBeInTheDocument();
+    expect(screen.queryByText(/load your documents/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
   });
 });

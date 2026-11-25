@@ -180,7 +180,7 @@ export function WorkspacePage() {
                     onToggle={toggleScope}
                     loading={documentsLoading}
                     error={documentsError}
-                    onRetry={() => void refetchDocuments()}
+                    onRetry={refetchDocuments}
                   />
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">

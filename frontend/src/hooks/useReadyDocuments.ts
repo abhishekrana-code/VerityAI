@@ -56,7 +56,7 @@ export function useReadyDocuments() {
 
   // Retrying an errored query keeps `status: 'error'`, so a fetch in flight
   // with no data is still a load, not a failure to report yet.
-  const isLoading = ready.isPending || (ready.isError && ready.isFetching);
+  const isLoading = !ready.data && (ready.isPending || ready.isFetching);
 
   return {
     documents: ready.data,

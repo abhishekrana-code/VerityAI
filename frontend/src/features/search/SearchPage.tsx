@@ -141,7 +141,7 @@ export function SearchPage() {
                 onToggle={toggleDocument}
                 loading={isLoading}
                 error={isError}
-                onRetry={() => void refetch()}
+                onRetry={refetch}
                 showPageCount
               />
             </div>
