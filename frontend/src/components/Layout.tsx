@@ -9,13 +9,13 @@ import {
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
-// Four destinations only: the core Upload → Ask → Check loop. Search stays in
-// the header, Settings in the account menu, and the retired pages redirect to
-// the Library.
+// Five destinations: the core Upload → Ask → Check loop plus Search. Settings
+// lives in the account menu, and the retired pages redirect to the Library.
 const navigation = [
   { name: 'Home', href: '/dashboard', icon: LayoutDashboard, end: true },
   { name: 'Library', href: '/dashboard/documents', icon: FolderOpen },
   { name: 'Ask', href: '/dashboard/workspace', icon: MessageSquare },
+  { name: 'Search', href: '/dashboard/search', icon: Search },
   { name: 'Checks', href: '/dashboard/verification', icon: ShieldCheck },
 ];
 
