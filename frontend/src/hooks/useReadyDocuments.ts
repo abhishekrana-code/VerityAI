@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type Document } from '@/lib/api';
 
-export const READY_DOCUMENTS_QUERY_KEY = ['documents', 'ready'] as const;
+const READY_DOCUMENTS_QUERY_KEY = ['documents', 'ready'];
+const PENDING_SCAN_QUERY_KEY = ['documents', 'pending-scan'];
 
 /** How often to look again while a PDF is still being processed. */
 const POLL_MS = 2500;
@@ -18,16 +19,18 @@ function isProcessing(doc: Document) {
  *
  * Uploading invalidates `['documents']` while the PDF is still processing, so
  * that refetch can cache an empty ready list for the whole stale window (five
- * minutes). Watch the newest documents and poll the ready list until the last
- * one leaves the queue, so the composer unlocks without a reload.
+ * minutes). The scan below polls the newest documents while any is pending and
+ * refreshes the ready list whenever that queue changes — including when it
+ * empties — so the composer unlocks without a reload.
  */
 export function useReadyDocuments() {
   const queryClient = useQueryClient();
+  type DocumentPage = { content: Document[] };
 
   const { data: pendingCount = 0 } = useQuery({
-    queryKey: ['documents', 'pending-scan'],
+    queryKey: PENDING_SCAN_QUERY_KEY,
     queryFn: async () => {
-      const recent = await api.get<{ content: Document[] }>(`/documents?size=${RECENT_WINDOW}`);
+      const recent = await api.get<DocumentPage>(`/documents?size=${RECENT_WINDOW}`);
       return recent.content.filter(isProcessing).length;
     },
     refetchInterval: (query) => ((query.state.data ?? 0) > 0 ? POLL_MS : false),
@@ -35,19 +38,14 @@ export function useReadyDocuments() {
 
   const ready = useQuery({
     queryKey: READY_DOCUMENTS_QUERY_KEY,
-    queryFn: () => api.get<{ content: Document[] }>('/documents?size=100&status=READY'),
+    queryFn: () => api.get<DocumentPage>('/documents?size=100&status=READY'),
     select: (data) => data.content,
-    refetchInterval: pendingCount > 0 ? POLL_MS : false,
   });
 
-  // The last poll can land just before processing finishes; refresh once more
-  // when the queue empties so a finished document is never left out.
-  const wasPending = useRef(false);
+  // The queue is the only thing that changes this list, so each step it takes
+  // (including reaching zero) is exactly when a refetch can show something new.
   useEffect(() => {
-    if (wasPending.current && pendingCount === 0) {
-      void queryClient.invalidateQueries({ queryKey: READY_DOCUMENTS_QUERY_KEY });
-    }
-    wasPending.current = pendingCount > 0;
+    void queryClient.invalidateQueries({ queryKey: READY_DOCUMENTS_QUERY_KEY });
   }, [pendingCount, queryClient]);
 
   return ready;
