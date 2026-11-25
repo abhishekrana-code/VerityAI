@@ -2,10 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import {
   api,
-  type Document,
   type SearchResponse,
   type SearchHit,
   type SearchStrategy,
@@ -16,6 +15,7 @@ import { PdfPreviewModal, type PdfPreviewTarget } from '@/components/PdfPreviewM
 import { PageEmpty, PageError, PageLoading } from '@/components/ui/PageStates';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { useToast } from '@/hooks/useToast';
+import { useReadyDocuments } from '@/hooks/useReadyDocuments';
 import {
   ArrowUpRight, FileText, Filter, Loader2, Search, Sparkles, X,
 } from 'lucide-react';
@@ -33,11 +33,8 @@ export function SearchPage() {
   const [scopeOpen, setScopeOpen] = useState(false);
   const [preview, setPreview] = useState<{ doc: PdfPreviewTarget; page: number } | null>(null);
 
-  const { data: documents } = useQuery({
-    queryKey: ['documents', 'ready', 'search-page'],
-    queryFn: () => api.get<{ content: Document[] }>('/documents?size=100&status=READY'),
-    select: (data) => data.content,
-  });
+  // Same ready list and refresh path as the Ask composer.
+  const { data: documents } = useReadyDocuments();
 
   const search = useMutation({
     mutationFn: (q: string) =>
