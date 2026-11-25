@@ -21,8 +21,7 @@
 // Options:
 //   --base <url>        stack origin (default http://localhost:8080)
 //   --pages <n>         PDF length (default 20)
-//   --budget-ms <n>     end-to-end deadline (default 90000)
-//   --timeout-ms <n>    per-stage deadline for processing and answering
+//   --budget-ms <n>     end-to-end deadline (default 90000), also the stage timeout
 //   --json <path>       report path (default backend/target/perf/ask-latency.json)
 //   --keep              keep the probe account instead of deleting it
 //   -h, --help
@@ -59,7 +58,6 @@ function option(name, fallback) {
 const base = option('base', 'http://localhost:8080').replace(/\/$/, '');
 const pages = Number(option('pages', '20'));
 const budgetMs = Number(option('budget-ms', '90000'));
-const timeoutMs = Number(option('timeout-ms', '180000'));
 const reportPath = resolve(root, option('json', 'backend/target/perf/ask-latency.json'));
 const reportDir = dirname(reportPath);
 const probePdfPath = join(reportDir, `probe-${pages}-pages.pdf`);
@@ -178,19 +176,19 @@ async function fetchCsrf() {
   csrfHeader = body.headerName || csrfHeader;
 }
 
-async function api(path, { method = 'GET', body, raw, accept } = {}) {
+async function api(path, { method = 'GET', body, raw, signal } = {}) {
   const mutating = method !== 'GET';
   if (mutating && !csrfToken) await fetchCsrf();
 
   const send = () => {
     const headers = { ...(cookies.size ? { Cookie: cookieHeader() } : {}) };
-    if (accept) headers.Accept = accept;
     if (body !== undefined && !raw) headers['Content-Type'] = 'application/json';
     if (mutating && csrfToken) headers[csrfHeader] = csrfToken;
     return fetch(`${base}${path}`, {
       method,
       headers,
       body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
+      signal,
     });
   };
 
@@ -204,7 +202,14 @@ async function api(path, { method = 'GET', body, raw, accept } = {}) {
 
   if (response.status === 204) return null;
   const text = await response.text();
-  const parsed = text ? JSON.parse(text) : null;
+  let parsed = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // A proxy error page (nginx 502) is not JSON; keep its text for the error.
+    }
+  }
   if (!response.ok) {
     const message = parsed?.message ?? text.slice(0, 200);
     throw new Error(`${method} ${path} returned ${response.status}: ${message}`);
@@ -215,7 +220,8 @@ async function api(path, { method = 'GET', body, raw, accept } = {}) {
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
 
-async function waitFor(check, { deadline, interval = 500, what }) {
+// Poll fast enough that the answer, not the poll interval, dominates the timing.
+async function waitFor(check, { deadline, interval = 200, what }) {
   for (;;) {
     const result = await check();
     if (result) return result;
@@ -262,7 +268,7 @@ try {
       }
       return current.status === 'READY' ? current : null;
     },
-    { deadline: Date.now() + timeoutMs, what: 'document to become READY' },
+    { deadline: uploadStarted + budgetMs, what: 'document to become READY' },
   );
   const processingMs = Date.now() - uploadStarted - uploadMs;
 
@@ -275,6 +281,8 @@ try {
   const message = await api(`/api/v1/conversations/${conversation.id}/messages`, {
     method: 'POST',
     body: { question: QUESTION, documentIds: [] },
+    // Everything after the upload counts against the budget; don't hang past it.
+    signal: AbortSignal.timeout(Math.max(1000, uploadStarted + budgetMs - Date.now())),
   });
   const answerMs = Date.now() - answerStarted;
   const totalMs = Date.now() - uploadStarted;
@@ -341,13 +349,17 @@ try {
 
   if (failures.length) process.exitCode = 1;
 } catch (error) {
-  console.error(`probe failed: ${error.message}`);
-  console.error('If the answer step failed, check the stack has LLM_API_KEY/GROQ_API_KEY configured.');
-  if (error.message.includes('429') && error.message.includes('register')) {
-    console.error(
-      'Registration is capped per IP (RATE_LIMIT_REGISTER_PER_HOUR_IP, 10/hour by default), ' +
-        'so repeated runs need to wait for the window or raise that setting for local runs.',
-    );
+  if (error.name === 'TimeoutError') {
+    console.error(`probe failed: the answer exceeded the ${seconds(budgetMs)} budget`);
+  } else {
+    console.error(`probe failed: ${error.message}`);
+    console.error('If the answer step failed, check the stack has LLM_API_KEY/GROQ_API_KEY configured.');
+    if (error.message.includes('429') && error.message.includes('register')) {
+      console.error(
+        'Registration is capped per IP (RATE_LIMIT_REGISTER_PER_HOUR_IP, 10/hour by default), ' +
+          'so repeated runs need to wait for the window or raise that setting for local runs.',
+      );
+    }
   }
   process.exitCode = 1;
 } finally {

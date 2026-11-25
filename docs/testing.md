@@ -251,8 +251,8 @@ purge script recognises the address too).
 
 The breakdown separates upload, processing (extraction, chunking, embeddings)
 and answer (retrieval + model), and the JSON report goes to
-`backend/target/perf/ask-latency.json`. `--timeout-ms`, `--json` and `--base`
-are the other knobs. Each run registers an account, so the stack's registration
+`backend/target/perf/ask-latency.json`. `--json` and `--base` are the
+other knobs; the budget doubles as the processing and answer timeout. Each run registers an account, so the stack's registration
 limit (`RATE_LIMIT_REGISTER_PER_HOUR_IP`, 10/hour by default) caps how often it
 can be repeated without changing that setting. It is a smoke measurement of one
 warm local stack — not a benchmark: model and provider choice, host CPU and a
