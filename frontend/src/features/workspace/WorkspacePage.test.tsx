@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { api, type Document } from '@/lib/api';
 import { renderWithProviders } from '@/test/renderWithProviders';
@@ -83,5 +83,32 @@ describe('WorkspacePage composer', () => {
 
     expect(screen.getAllByText('Loading documents…')).toHaveLength(2);
     expect(screen.queryByText('No ready documents yet — upload a PDF first.')).not.toBeInTheDocument();
+  });
+
+  it('offers a retry instead of an empty library when the documents request fails', async () => {
+    get.mockImplementation((endpoint: string) => {
+      if (endpoint.startsWith('/conversations')) return Promise.resolve(page([]));
+      if (endpoint.includes('status=READY')) return Promise.reject(new Error('documents unavailable'));
+      if (endpoint.startsWith('/documents?size=10')) return Promise.resolve(page([]));
+      return Promise.reject(new Error(`unexpected GET ${endpoint}`));
+    });
+
+    renderWithProviders(<WorkspacePage />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Documents unavailable' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Upload a PDF to ask your first question/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Documents unavailable' }));
+
+    expect(screen.getByText(/load your documents/)).toBeInTheDocument();
+    expect(screen.queryByText('No ready documents yet — upload a PDF first.')).not.toBeInTheDocument();
+
+    const readyRequests = () =>
+      get.mock.calls.filter(([endpoint]) => endpoint.includes('status=READY')).length;
+    const before = readyRequests();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(readyRequests()).toBeGreaterThan(before));
   });
 });

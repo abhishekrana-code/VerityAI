@@ -12,6 +12,9 @@ interface DocumentScopeListProps {
   onToggle: (id: string) => void;
   /** The lists have not resolved yet, so "no documents" would be a guess. */
   loading: boolean;
+  /** The ready list failed to load; also not the same as having none. */
+  error: boolean;
+  onRetry: () => void;
   /** Show page counts, as the Search picker does. */
   showPageCount?: boolean;
 }
@@ -28,11 +31,28 @@ export function DocumentScopeList({
   selectedIds,
   onToggle,
   loading,
+  error,
+  onRetry,
   showPageCount = false,
 }: DocumentScopeListProps) {
   if (loading) {
     return (
       <p className="px-2 py-1 text-sm text-muted-foreground">Loading documents…</p>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-1 px-2 py-1">
+        <p className="text-sm text-muted-foreground">Couldn’t load your documents.</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 

@@ -54,5 +54,15 @@ export function useReadyDocuments() {
     void queryClient.invalidateQueries({ queryKey: READY_DOCUMENTS_QUERY_KEY });
   }, [processing.length, queryClient]);
 
-  return { documents: ready.data, processing, isLoading: ready.isPending };
+  // Retrying an errored query keeps `status: 'error'`, so a fetch in flight
+  // with no data is still a load, not a failure to report yet.
+  const isLoading = ready.isPending || (ready.isError && ready.isFetching);
+
+  return {
+    documents: ready.data,
+    processing,
+    isLoading,
+    isError: ready.isError && !isLoading,
+    refetch: ready.refetch,
+  };
 }

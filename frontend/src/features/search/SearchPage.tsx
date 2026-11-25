@@ -35,7 +35,7 @@ export function SearchPage() {
   const [preview, setPreview] = useState<{ doc: PdfPreviewTarget; page: number } | null>(null);
 
   // Same ready list and refresh path as the Ask composer.
-  const { documents, processing, isLoading } = useReadyDocuments();
+  const { documents, processing, isLoading, isError, refetch } = useReadyDocuments();
 
   const search = useMutation({
     mutationFn: (q: string) =>
@@ -140,6 +140,8 @@ export function SearchPage() {
                 selectedIds={selectedDocs}
                 onToggle={toggleDocument}
                 loading={isLoading}
+                error={isError}
+                onRetry={() => void refetch()}
                 showPageCount
               />
             </div>

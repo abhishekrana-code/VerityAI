@@ -46,7 +46,13 @@ export function WorkspacePage() {
     placeholderData: (prev) => prev,
   });
 
-  const { documents, processing, isLoading: documentsLoading } = useReadyDocuments();
+  const {
+    documents,
+    processing,
+    isLoading: documentsLoading,
+    isError: documentsError,
+    refetch: refetchDocuments,
+  } = useReadyDocuments();
 
   /**
    * Asking creates the conversation implicitly, so the user never names one
@@ -97,11 +103,14 @@ export function WorkspacePage() {
   const readyCount = documents?.length ?? 0;
   const selectedDocuments = documents?.filter((d) => scopeIds.includes(d.id)) ?? [];
   const canAsk = question.trim().length > 0 && readyCount > 0 && !askMutation.isPending;
-  const scopeLabel = documentsLoading
-    ? 'Loading documents…'
-    : selectedDocuments.length === 0
-      ? `All ready documents (${readyCount})`
-      : `${pluralize(selectedDocuments.length, 'document')} selected`;
+  let scopeLabel = `All ready documents (${readyCount})`;
+  if (selectedDocuments.length > 0) {
+    scopeLabel = `${pluralize(selectedDocuments.length, 'document')} selected`;
+  } else if (documentsLoading) {
+    scopeLabel = 'Loading documents…';
+  } else if (documentsError) {
+    scopeLabel = 'Documents unavailable';
+  }
 
   const submit = () => {
     const text = question.trim();
@@ -170,6 +179,8 @@ export function WorkspacePage() {
                     selectedIds={scopeIds}
                     onToggle={toggleScope}
                     loading={documentsLoading}
+                    error={documentsError}
+                    onRetry={() => void refetchDocuments()}
                   />
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
@@ -215,7 +226,7 @@ export function WorkspacePage() {
           </p>
         )}
         {/* Until the list resolves there is nothing true to say, so say nothing. */}
-        {readyCount === 0 && processing.length === 0 && !documentsLoading && (
+        {readyCount === 0 && processing.length === 0 && !documentsLoading && !documentsError && (
           <p className="text-sm text-muted-foreground">
             <Sparkles className="mr-1 inline h-4 w-4 text-primary" aria-hidden="true" />
             Upload a PDF to ask your first question.{' '}
