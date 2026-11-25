@@ -227,6 +227,37 @@ Run it before changing the RAG prompt, citation rules, retrieval defaults or the
 model, and compare the report to the previous run. It is a small sample: it
 detects a regression, it does not measure quality in absolute terms.
 
+## Upload-to-answer latency probe (live stack)
+
+The brief budgets **90 seconds** from upload to a cited answer for a 20-page PDF.
+Nothing in the mocked suite measures that, so `scripts/measure-ask-latency.mjs`
+drives the real API of a running stack and reports where the time goes:
+
+```bash
+node scripts/measure-ask-latency.mjs            # 20 pages, 90 s budget
+node scripts/measure-ask-latency.mjs --keep     # keep the account for inspection
+node scripts/measure-ask-latency.mjs --pages 5 --budget-ms 45000
+```
+
+The stack must be up (`docker compose up -d`, `http://localhost:8080`) with a
+real `LLM_API_KEY`/`GROQ_API_KEY`; each run spends one model call. The probe
+generates a deterministic 20-page PDF (~2,400 characters per page, about 60
+chunks), registers a throwaway `live-<8 hex>@example.com` account, uploads it,
+polls `/documents/{id}` until `READY`, creates a conversation scoped to that
+document, and asks a question whose fact appears on two pages. It passes only
+when the answer is `COMPLETED`, carries at least one citation and an `[S#]`
+marker, and the whole path fits the budget; the account is then deleted (the
+purge script recognises the address too).
+
+The breakdown separates upload, processing (extraction, chunking, embeddings)
+and answer (retrieval + model), and the JSON report goes to
+`backend/target/perf/ask-latency.json`. `--timeout-ms`, `--json` and `--base`
+are the other knobs. Each run registers an account, so the stack's registration
+limit (`RATE_LIMIT_REGISTER_PER_HOUR_IP`, 10/hour by default) caps how often it
+can be repeated without changing that setting. It is a smoke measurement of one
+warm local stack — not a benchmark: model and provider choice, host CPU and a
+cold ONNX model load all move the answer and processing numbers.
+
 ## CI
 
 `.github/workflows/ci.yml` runs three jobs on every push and pull request:
