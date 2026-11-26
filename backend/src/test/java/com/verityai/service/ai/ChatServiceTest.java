@@ -296,4 +296,38 @@ class ChatServiceTest {
         assertThat(failed.getContent()).isEqualTo(LlmErrors.UNAVAILABLE);
         verify(conversationRepository, never()).touch(any(), any());
     }
+
+    @Test
+    void greetingGetsAFriendlyIntroWithoutRetrievalOrModelCall() {
+        MessageResponse response = chatService.ask(conversation, "hello", null);
+
+        assertThat(response.getContent()).contains("VerityAI").contains("How can I help you today?");
+        assertThat(response.getCitations()).isEmpty();
+        verify(retrievalService, never()).retrieve(any(), any(), any());
+        verify(llmService, never()).generate(any());
+        verify(messageRepository, times(2)).save(any(Message.class));
+    }
+
+    @Test
+    void streamedGreetingSendsTheWholeReplyAsOneDelta() {
+        List<String> deltas = new ArrayList<>();
+
+        MessageResponse response = chatService.streamAsk(conversation, "Hi VerityAI!", null, deltas::add);
+
+        assertThat(deltas).containsExactly(response.getContent());
+        verify(llmService, never()).stream(any(), any());
+        verify(retrievalService, never()).retrieve(any(), any(), any());
+    }
+
+    @Test
+    void aGreetingFollowedByARealQuestionStillUsesTheDocuments() {
+        when(retrievalService.retrieve(any(), any(), any())).thenReturn(List.of());
+        when(llmService.generate(any())).thenReturn(new LlmService.ChatResponse(
+            "Insufficient evidence to answer.", 10, 5, 100, "test-model", List.of()));
+
+        chatService.ask(conversation, "hello, what is the revenue in 2023?", null);
+
+        verify(retrievalService).retrieve(any(), any(), any());
+        verify(llmService).generate(any());
+    }
 }

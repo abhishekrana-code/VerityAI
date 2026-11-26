@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -72,6 +73,10 @@ public class ChatService {
      */
     @Transactional(noRollbackFor = LlmGenerationException.class)
     public MessageResponse ask(Conversation conversation, String question, List<UUID> requestedDocIds) {
+        Optional<String> smallTalk = SmallTalk.replyFor(question);
+        if (smallTalk.isPresent()) {
+            return answerSmallTalk(conversation, question, smallTalk.get(), null);
+        }
         List<RetrievalService.RetrievedChunk> evidence = prepare(conversation, question, requestedDocIds);
 
         LlmService.ChatResponse llmResponse;
@@ -96,6 +101,10 @@ public class ChatService {
      */
     public MessageResponse streamAsk(Conversation conversation, String question,
                                      List<UUID> requestedDocIds, Consumer<String> onDelta) {
+        Optional<String> smallTalk = SmallTalk.replyFor(question);
+        if (smallTalk.isPresent()) {
+            return answerSmallTalk(conversation, question, smallTalk.get(), onDelta);
+        }
         List<RetrievalService.RetrievedChunk> evidence = prepare(conversation, question, requestedDocIds);
 
         LlmService.ChatResponse llmResponse;
@@ -106,6 +115,38 @@ public class ChatService {
             throw fail(conversation, e);
         }
         return persist(conversation, evidence, llmResponse);
+    }
+
+    /**
+     * Greetings, thanks and "who are you" get a direct reply: no document
+     * retrieval, no model call and no citations. Both messages are still stored
+     * so the conversation reads naturally when reopened.
+     */
+    private MessageResponse answerSmallTalk(Conversation conversation, String question,
+                                            String reply, Consumer<String> onDelta) {
+        if (onDelta != null) {
+            onDelta.accept(reply);
+        }
+        return transactionTemplate.execute(status -> {
+            Message userMessage = new Message();
+            userMessage.setConversation(conversation);
+            userMessage.setRole(Message.MessageRole.USER);
+            userMessage.setContent(question);
+            userMessage.setStatus(Message.MessageStatus.COMPLETED);
+            messageRepository.save(userMessage);
+
+            Message assistantMessage = new Message();
+            assistantMessage.setConversation(conversation);
+            assistantMessage.setRole(Message.MessageRole.ASSISTANT);
+            assistantMessage.setContent(reply);
+            assistantMessage.setStatus(Message.MessageStatus.COMPLETED);
+            assistantMessage.setModel(SmallTalk.MODEL_NAME);
+            assistantMessage.setEvidenceStatus(Message.EvidenceStatus.NONE);
+            messageRepository.save(assistantMessage);
+
+            conversationRepository.touch(conversation.getId(), Instant.now());
+            return toMessageResponse(assistantMessage, List.of());
+        });
     }
 
     private LlmService.ChatRequest chatRequest(String question, List<RetrievalService.RetrievedChunk> evidence) {
