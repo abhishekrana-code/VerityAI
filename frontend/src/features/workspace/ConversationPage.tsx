@@ -155,6 +155,8 @@ export function ConversationPage() {
     if (!conversationId) return;
     for (const message of messages) {
       if (message.role !== 'ASSISTANT' || message.status !== 'COMPLETED') continue;
+      // Greetings and other replies with no evidence have no claims to check.
+      if (message.evidenceStatus === 'NONE') continue;
       if (verifications[message.id] || quickChecksStarted.current.has(message.id)) continue;
       quickChecksStarted.current.add(message.id);
       void (async () => {
